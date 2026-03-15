@@ -1,3 +1,6 @@
+# Ignore docs folder
+docs
+
 # Ignore Gradle project-specific cache directory
 .gradle
 
