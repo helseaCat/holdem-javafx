@@ -156,6 +156,19 @@ class HandEvaluatorTest {
         assertEquals(FOUR_OF_A_KIND, evaluator.evaluate(cards));
     }
 
+    // --- Wheel Straight Flush ---
+    @Test
+    void wheelStraightFlush() {
+        // A♣ 2♣ 3♣ 4♣ 5♣ K♦ Q♦ → best 5-card hand is A-2-3-4-5 suited = STRAIGHT_FLUSH
+        List<Card> cards = List.of(
+            c(Suit.CLUBS, Rank.ACE), c(Suit.CLUBS, Rank.TWO),
+            c(Suit.CLUBS, Rank.THREE), c(Suit.CLUBS, Rank.FOUR),
+            c(Suit.CLUBS, Rank.FIVE), c(Suit.DIAMONDS, Rank.KING),
+            c(Suit.DIAMONDS, Rank.QUEEN)
+        );
+        assertEquals(STRAIGHT_FLUSH, evaluator.evaluate(cards));
+    }
+
     // --- Straight Flush ---
     @Test
     void straightFlush() {
