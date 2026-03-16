@@ -16,6 +16,17 @@ public class HandEvaluator {
      * Returns a HandRank representing the best hand.
      */
     public HandRank evaluate(List<Card> cards) {
+        if (cards == null) {
+            throw new IllegalArgumentException("cards must not be null");
+        }
+        if (cards.size() < 5) {
+            throw new IllegalArgumentException("at least 5 cards required, got " + cards.size());
+        }
+        for (Card card : cards) {
+            if (card == null) {
+                throw new IllegalArgumentException("cards must not contain null elements");
+            }
+        }
         // TODO: implement full 7-card hand evaluation
         return HandRank.HIGH_CARD;
     }

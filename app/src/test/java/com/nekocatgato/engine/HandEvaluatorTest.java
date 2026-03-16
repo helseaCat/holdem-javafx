@@ -22,6 +22,32 @@ class HandEvaluatorTest {
     // --- Helper ---
     private Card c(Suit s, Rank r) { return new Card(s, r); }
 
+    // --- Input Validation ---
+    @Test
+    void nullListThrows() {
+        assertThrows(IllegalArgumentException.class, () -> evaluator.evaluate(null));
+    }
+
+    @Test
+    void tooFewCardsThrows() {
+        List<Card> cards = List.of(
+            c(Suit.HEARTS, Rank.ACE), c(Suit.DIAMONDS, Rank.KING),
+            c(Suit.CLUBS, Rank.QUEEN), c(Suit.SPADES, Rank.JACK)
+        );
+        assertThrows(IllegalArgumentException.class, () -> evaluator.evaluate(cards));
+    }
+
+    @Test
+    void listWithNullElementThrows() {
+        List<Card> cards = new java.util.ArrayList<>();
+        cards.add(c(Suit.HEARTS, Rank.ACE));
+        cards.add(null);
+        cards.add(c(Suit.CLUBS, Rank.QUEEN));
+        cards.add(c(Suit.SPADES, Rank.JACK));
+        cards.add(c(Suit.DIAMONDS, Rank.TEN));
+        assertThrows(IllegalArgumentException.class, () -> evaluator.evaluate(cards));
+    }
+
     // --- High Card ---
     @Test
     void highCard() {
