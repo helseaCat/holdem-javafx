@@ -1,6 +1,7 @@
 package com.nekocatgato.engine;
 
 import com.nekocatgato.model.*;
+import java.util.ArrayList;
 import java.util.List;
 
 public class GameController {
@@ -46,8 +47,22 @@ public class GameController {
     }
 
     public Player determineWinner() {
-        // TODO: use HandEvaluator to find winner among active players
-        return players.get(0);
+        // TODO: handle ties - return List<Player> and split pot
+        Player best = null;
+        HandEvaluator.HandRank bestRank = null;
+
+        for (Player p : players) {
+            List<Card> allCards = new ArrayList<>();
+            allCards.addAll(p.getHand().getCards());
+            allCards.addAll(state.getBoard().getCards());
+
+            HandEvaluator.HandRank rank = evaluator.evaluate(allCards);
+            if (best == null || rank.ordinal() > bestRank.ordinal()) {
+                best = p;
+                bestRank = rank;
+            }
+        }
+        return best;
     }
 
     public GameState getState() { return state; }
