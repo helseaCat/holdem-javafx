@@ -1,7 +1,5 @@
 package com.nekocatgato.model;
 
-import java.util.List;
-
 public class GameState {
     public enum Phase { PRE_FLOP, FLOP, TURN, RIVER, SHOWDOWN }
 
