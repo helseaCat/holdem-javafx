@@ -43,6 +43,7 @@ public class HandEvaluator {
 
     /**
      * Compares two hands. Returns positive if hand1 wins, negative if hand2 wins, 0 for tie.
+     * TODO: fix - only compares HandRank, doesn't handle kickers/tie-breakers
      */
     public int compare(List<Card> hand1, List<Card> hand2) {
         return evaluate(hand1).ordinal() - evaluate(hand2).ordinal();
