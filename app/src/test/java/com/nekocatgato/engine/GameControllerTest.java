@@ -309,4 +309,173 @@ class GameControllerTest {
         // So it should be treated as CALL
         assertNotNull(controller.getActivePlayers());
     }
+
+    // Community card dealing tests (Task 7)
+
+    private void setupAllPlayersCheckOrCall() {
+        // Set up both players to check/call to avoid folding
+        for (Player p : players) {
+            if (p instanceof HumanPlayer) {
+                ((HumanPlayer) p).setPendingAction(Player.Action.CHECK, 0);
+            }
+        }
+    }
+
+    @Test
+    void dealFlopDealsThreeCardsToBoard() {
+        controller.startGame(players);
+        setupAllPlayersCheckOrCall();
+        
+        assertEquals(0, controller.getState().getBoard().getCards().size());
+        
+        controller.dealFlop();
+        
+        assertEquals(3, controller.getState().getBoard().getCards().size());
+    }
+
+    @Test
+    void dealTurnDealsOneCardToBoard() {
+        controller.startGame(players);
+        setupAllPlayersCheckOrCall();
+        controller.dealFlop();
+        
+        int cardsAfterFlop = controller.getState().getBoard().getCards().size();
+        assertEquals(3, cardsAfterFlop);
+        
+        controller.dealTurn();
+        
+        assertEquals(4, controller.getState().getBoard().getCards().size());
+    }
+
+    @Test
+    void dealRiverDealsOneCardToBoard() {
+        controller.startGame(players);
+        setupAllPlayersCheckOrCall();
+        controller.dealFlop();
+        controller.dealTurn();
+        
+        assertEquals(4, controller.getState().getBoard().getCards().size());
+        
+        controller.dealRiver();
+        
+        assertEquals(5, controller.getState().getBoard().getCards().size());
+    }
+
+    @Test
+    void dealFlopThrowsWhenNotPreFlop() {
+        controller.startGame(players);
+        setupAllPlayersCheckOrCall();
+        // Already in PRE_FLOP after startGame
+        
+        // Call dealFlop again - should work
+        controller.dealFlop();
+        
+        // Call dealFlop again - should throw because now in FLOP
+        assertThrows(IllegalStateException.class, () -> controller.dealFlop());
+    }
+
+    @Test
+    void dealTurnThrowsWhenNotFlop() {
+        controller.startGame(players);
+        setupAllPlayersCheckOrCall();
+        
+        // dealTurn without dealFlop should throw
+        assertThrows(IllegalStateException.class, () -> controller.dealTurn());
+        
+        // After dealFlop, should work
+        controller.dealFlop();
+        controller.dealTurn();
+        
+        // Calling dealTurn again should throw
+        assertThrows(IllegalStateException.class, () -> controller.dealTurn());
+    }
+
+    @Test
+    void dealRiverThrowsWhenNotTurn() {
+        controller.startGame(players);
+        setupAllPlayersCheckOrCall();
+        
+        // dealRiver without dealTurn should throw
+        assertThrows(IllegalStateException.class, () -> controller.dealRiver());
+        
+        // After dealFlop, should still throw (need dealTurn first)
+        controller.dealFlop();
+        assertThrows(IllegalStateException.class, () -> controller.dealRiver());
+        
+        // After dealTurn, should work
+        controller.dealTurn();
+        controller.dealRiver();
+    }
+
+    @Test
+    void playerBetsResetToZeroBeforeFlopBettingRound() {
+        controller.startGame(players);
+        
+        // After blinds, players have bets
+        int sbIndex = (controller.getDealerButtonIndex() + 1) % players.size();
+        Player sbPlayer = players.get(sbIndex);
+        
+        assertTrue(sbPlayer.getCurrentBet() > 0);
+        
+        // After dealFlop, bets should be reset
+        setupAllPlayersCheckOrCall();
+        controller.dealFlop();
+        
+        for (Player p : controller.getActivePlayers()) {
+            assertEquals(0, p.getCurrentBet(), "Player bets should be reset to 0 after dealFlop");
+        }
+    }
+
+    @Test
+    void playerBetsResetToZeroBeforeTurnBettingRound() {
+        controller.startGame(players);
+        setupAllPlayersCheckOrCall();
+        controller.dealFlop();
+        
+        // After flop betting, players may have bets
+        // Reset them and verify before turn betting
+        controller.dealTurn();
+        
+        for (Player p : controller.getActivePlayers()) {
+            assertEquals(0, p.getCurrentBet(), "Player bets should be reset to 0 after dealTurn");
+        }
+    }
+
+    @Test
+    void playerBetsResetToZeroBeforeRiverBettingRound() {
+        controller.startGame(players);
+        setupAllPlayersCheckOrCall();
+        controller.dealFlop();
+        controller.dealTurn();
+        
+        // After turn betting, players may have bets
+        // Reset them and verify before river betting
+        controller.dealRiver();
+        
+        for (Player p : controller.getActivePlayers()) {
+            assertEquals(0, p.getCurrentBet(), "Player bets should be reset to 0 after dealRiver");
+        }
+    }
+
+    @Test
+    void phaseTransitionsToShowdownAfterRiverBetting() {
+        controller.startGame(players);
+        setupAllPlayersCheckOrCall();
+        
+        // Need to ensure both players stay in (not fold)
+        // We'll use AI that checks/calls
+        controller.dealFlop();
+        assertEquals(GameState.Phase.FLOP, controller.getState().getPhase());
+        
+        controller.dealTurn();
+        assertEquals(GameState.Phase.TURN, controller.getState().getPhase());
+        
+        controller.dealRiver();
+        
+        // After river betting (if more than 1 player), should be SHOWDOWN
+        // Since we have 2 players and they haven't folded, should be SHOWDOWN
+        if (controller.getActivePlayers().size() > 1) {
+            assertEquals(GameState.Phase.SHOWDOWN, controller.getState().getPhase());
+        }
+    }
 }

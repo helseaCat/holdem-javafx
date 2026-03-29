@@ -226,19 +226,38 @@ public class GameController {
     }
 
     public void dealFlop() {
-        for (int i = 0; i < 3; i++)
+        if (state.getPhase() != GameState.Phase.PRE_FLOP) {
+            throw new IllegalStateException("dealFlop() requires PRE_FLOP phase, but current phase is " + state.getPhase());
+        }
+        for (int i = 0; i < 3; i++) {
             state.getBoard().addCard(state.getDeck().deal());
+        }
+        resetPlayerBets();
         state.setPhase(GameState.Phase.FLOP);
+        runBettingRound((dealerButtonIndex + 1) % activePlayers.size());
     }
 
     public void dealTurn() {
+        if (state.getPhase() != GameState.Phase.FLOP) {
+            throw new IllegalStateException("dealTurn() requires FLOP phase, but current phase is " + state.getPhase());
+        }
         state.getBoard().addCard(state.getDeck().deal());
+        resetPlayerBets();
         state.setPhase(GameState.Phase.TURN);
+        runBettingRound((dealerButtonIndex + 1) % activePlayers.size());
     }
 
     public void dealRiver() {
+        if (state.getPhase() != GameState.Phase.TURN) {
+            throw new IllegalStateException("dealRiver() requires TURN phase, but current phase is " + state.getPhase());
+        }
         state.getBoard().addCard(state.getDeck().deal());
+        resetPlayerBets();
         state.setPhase(GameState.Phase.RIVER);
+        runBettingRound((dealerButtonIndex + 1) % activePlayers.size());
+        if (activePlayers.size() > 1) {
+            state.setPhase(GameState.Phase.SHOWDOWN);
+        }
     }
 
     public Player determineWinner() {
