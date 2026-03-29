@@ -122,7 +122,12 @@ public class GameController {
 
         while (true) {
             if (activePlayers.size() == 1) {
-                awardPot(activePlayers);
+                // Award pot to the last remaining player
+                int pot = state.getPot();
+                Player winner = activePlayers.get(0);
+                winner.setChips(winner.getChips() + pot);
+                state.resetPot();
+                eliminateBrokePlayers();
                 return;
             }
 
@@ -145,7 +150,12 @@ public class GameController {
                 case FOLD:
                     activePlayers.remove(index);
                     if (activePlayers.size() == 1) {
-                        awardPot(activePlayers);
+                        // Award pot to the last remaining player
+                        int pot = state.getPot();
+                        Player winner = activePlayers.get(0);
+                        winner.setChips(winner.getChips() + pot);
+                        state.resetPot();
+                        eliminateBrokePlayers();
                         return;
                     }
                     // Don't increment pointer - next player slides into this slot
@@ -206,25 +216,6 @@ public class GameController {
         }
     }
 
-    private void awardPot(List<Player> winners) {
-        int pot = state.getPot();
-        if (winners.isEmpty() || pot == 0) {
-            state.resetPot();
-            return;
-        }
-
-        int share = pot / winners.size();
-        int remainder = pot % winners.size();
-
-        for (Player w : winners) {
-            w.setChips(w.getChips() + share);
-        }
-        // Remainder goes to first winner in seat order
-        winners.get(0).setChips(winners.get(0).getChips() + remainder);
-
-        state.resetPot();
-    }
-
     public void dealFlop() {
         if (state.getPhase() != GameState.Phase.PRE_FLOP) {
             throw new IllegalStateException("dealFlop() requires PRE_FLOP phase, but current phase is " + state.getPhase());
@@ -260,24 +251,66 @@ public class GameController {
         }
     }
 
-    public Player determineWinner() {
-        // TODO: fix bug - store best 5-card hand, not all 7 cards
-        // TODO: handle ties - return List<Player> and split pot
-        // TODO: handle all-in / side pots - track contributions, calculate main/side pots, distribute winnings
-        Player best = null;
-        List<Card> bestHand = null;
+    private List<Player> findWinners() {
+        List<Player> winners = new ArrayList<>();
+        HandEvaluator.HandRank bestRank = null;
 
         for (Player p : activePlayers) {
-            List<Card> allCards = new ArrayList<>();
-            allCards.addAll(p.getHand().getCards());
-            allCards.addAll(state.getBoard().getCards());
+            List<Card> sevenCards = new ArrayList<>();
+            sevenCards.addAll(p.getHand().getCards());
+            sevenCards.addAll(state.getBoard().getCards());
 
-            if (best == null || evaluator.compare(allCards, bestHand) > 0) {
-                best = p;
-                bestHand = allCards;
+            HandEvaluator.HandRank rank = evaluator.evaluate(sevenCards);
+
+            if (bestRank == null || rank.ordinal() > bestRank.ordinal()) {
+                bestRank = rank;
+                winners.clear();
+                winners.add(p);
+            } else if (rank.ordinal() == bestRank.ordinal()) {
+                winners.add(p);
             }
         }
-        return best;
+
+        return winners;
+    }
+
+    private void awardPot(List<Player> winners) {
+        int pot = state.getPot();
+        if (winners.isEmpty() || pot == 0) {
+            state.resetPot();
+            return;
+        }
+
+        int share = pot / winners.size();
+        int remainder = pot % winners.size();
+
+        for (Player w : winners) {
+            w.setChips(w.getChips() + share);
+        }
+        // Remainder goes to first winner in seat order
+        winners.get(0).setChips(winners.get(0).getChips() + remainder);
+
+        state.resetPot();
+    }
+
+    private void eliminateBrokePlayers() {
+        players.removeIf(p -> p.getChips() == 0);
+        if (players.size() == 1) {
+            gameOver = true;
+            gameWinner = players.get(0);
+        }
+    }
+
+    public Player determineWinner() {
+        if (state.getPhase() != GameState.Phase.SHOWDOWN) {
+            throw new IllegalStateException("determineWinner() requires SHOWDOWN phase, but current phase is " + state.getPhase());
+        }
+
+        List<Player> winners = findWinners();
+        awardPot(winners);
+        eliminateBrokePlayers();
+
+        return winners.get(0);
     }
 
     public GameState getState() { return state; }
