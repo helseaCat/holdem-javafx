@@ -242,14 +242,13 @@ public class GameController {
     }
 
     public Player determineWinner() {
-        // TODO: filter to only active (non-folded) players
         // TODO: fix bug - store best 5-card hand, not all 7 cards
         // TODO: handle ties - return List<Player> and split pot
         // TODO: handle all-in / side pots - track contributions, calculate main/side pots, distribute winnings
         Player best = null;
         List<Card> bestHand = null;
 
-        for (Player p : players) {
+        for (Player p : activePlayers) {
             List<Card> allCards = new ArrayList<>();
             allCards.addAll(p.getHand().getCards());
             allCards.addAll(state.getBoard().getCards());
