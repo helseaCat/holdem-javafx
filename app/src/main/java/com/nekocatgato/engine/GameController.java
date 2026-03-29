@@ -293,7 +293,8 @@ public class GameController {
         state.resetPot();
     }
 
-    private void eliminateBrokePlayers() {
+    /** Package-private for testability. */
+    void eliminateBrokePlayers() {
         players.removeIf(p -> p.getChips() == 0);
         if (players.size() == 1) {
             gameOver = true;

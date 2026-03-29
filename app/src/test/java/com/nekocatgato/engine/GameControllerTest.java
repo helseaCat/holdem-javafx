@@ -648,4 +648,58 @@ class GameControllerTest {
         // Note: eliminateBrokePlayers is called after awardPot in determineWinner
         // But since player2 already had 0 chips before the round, they should be removed
     }
+
+    // Task 9: Player elimination and game-over detection tests
+
+    @Test
+    void eliminateBrokePlayersRemovesZeroChipsFromPlayersList() {
+        controller.startGame(players);
+
+        // Rig chip counts: player at index 1 is broke
+        controller.getPlayers().get(1).setChips(0);
+
+        controller.eliminateBrokePlayers();
+
+        assertEquals(1, controller.getPlayers().size());
+        assertEquals("Player", controller.getPlayers().get(0).getName());
+    }
+
+    @Test
+    void gameOverTrueAndWinnerSetWhenOnePlayerRemains() {
+        controller.startGame(players);
+
+        // Rig chip counts: only first player has chips
+        controller.getPlayers().get(1).setChips(0);
+
+        controller.eliminateBrokePlayers();
+
+        assertTrue(controller.isGameOver());
+        assertEquals("Player", controller.getGameWinner().getName());
+    }
+
+    @Test
+    void chipConservationHoldsAcrossFullRound() {
+        HumanPlayer player1 = new HumanPlayer("Player1", 1000);
+        AIPlayer player2 = new AIPlayer("Player2", 1000);
+        List<Player> twoPlayers = List.of(player1, player2);
+
+        // Capture total chips before startGame (which posts blinds into the pot)
+        int totalChipsBefore = player1.getChips() + player2.getChips();
+
+        controller.startGame(twoPlayers);
+
+        // Run through a full round to showdown
+        setupAllPlayersCheckOrCallForController(controller);
+        controller.dealFlop();
+        controller.dealTurn();
+        controller.dealRiver();
+
+        controller.determineWinner();
+
+        int totalChipsAfter = player1.getChips() + player2.getChips();
+
+        // Total chips should be conserved across a full round
+        assertEquals(totalChipsBefore, totalChipsAfter,
+            "Total chips should be conserved across a full round");
+    }
 }
