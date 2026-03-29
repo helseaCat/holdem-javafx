@@ -37,24 +37,59 @@ public class GameController {
     }
 
     public void nextRound() {
+        assert players.size() >= 2 : "At least 2 players required";
         activePlayers = new ArrayList<>(players);
         state.getDeck().reset();
         state.getDeck().shuffle();
         state.getBoard().clear();
         state.resetPot();
-        for (Player p : players) {
+        for (Player p : activePlayers) {
             p.getHand().clear();
             p.setCurrentBet(0);
         }
         state.setPhase(GameState.Phase.PRE_FLOP);
         dealerButtonIndex = (dealerButtonIndex + 1) % players.size();
+        postBlinds();
         dealHoleCards();
     }
 
-    private void dealHoleCards() {
-        for (int i = 0; i < 2; i++)
-            for (Player p : players)
+    private void postBlinds() {
+        int sbIndex = smallBlindIndex();
+        int bbIndex = bigBlindIndex();
+        
+        Player sbPlayer = players.get(sbIndex);
+        Player bbPlayer = players.get(bbIndex);
+        
+        int sbAmount = Math.min(SMALL_BLIND, sbPlayer.getChips());
+        int bbAmount = Math.min(BIG_BLIND, bbPlayer.getChips());
+        
+        collectBet(sbPlayer, sbAmount);
+        collectBet(bbPlayer, bbAmount);
+    }
+
+    private void collectBet(Player player, int amount) {
+        int actual = Math.min(amount, player.getChips());
+        player.bet(actual);
+        state.addToPot(actual);
+    }
+
+    private int smallBlindIndex() {
+        return (dealerButtonIndex + 1) % players.size();
+    }
+
+    private int bigBlindIndex() {
+        return (dealerButtonIndex + 2) % players.size();
+    }
+
+    public void dealHoleCards() {
+        if (state.getDeck().size() < activePlayers.size() * 2) {
+            throw new IllegalStateException("Not enough cards in deck to deal hole cards");
+        }
+        for (int i = 0; i < 2; i++) {
+            for (Player p : activePlayers) {
                 p.getHand().addCard(state.getDeck().deal());
+            }
+        }
     }
 
     public void dealFlop() {
