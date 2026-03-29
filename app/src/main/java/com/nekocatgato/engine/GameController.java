@@ -73,6 +73,14 @@ public class GameController {
         state.addToPot(actual);
     }
 
+    private int getRaiseAmount(Player player) {
+        if (player instanceof HumanPlayer) {
+            return ((HumanPlayer) player).getPendingRaiseAmount();
+        }
+        // AI players don't raise in the current implementation
+        return 0;
+    }
+
     private int smallBlindIndex() {
         return (dealerButtonIndex + 1) % players.size();
     }
@@ -90,6 +98,131 @@ public class GameController {
                 p.getHand().addCard(state.getDeck().deal());
             }
         }
+    }
+
+    private void resetPlayerBets() {
+        for (Player p : activePlayers) {
+            p.setCurrentBet(0);
+        }
+    }
+
+    private void runBettingRound(int firstToActIndex) {
+        if (activePlayers.size() <= 1) {
+            return;
+        }
+
+        int highestBet = 0;
+        for (Player p : activePlayers) {
+            highestBet = Math.max(highestBet, p.getCurrentBet());
+        }
+
+        Player lastRaiser = null;
+        int pointer = firstToActIndex;
+        int acted = 0;
+
+        while (true) {
+            if (activePlayers.size() == 1) {
+                awardPot(activePlayers);
+                return;
+            }
+
+            int index = pointer % activePlayers.size();
+            Player player = activePlayers.get(index);
+
+            // Skip all-in players (chips == 0) without counting them as acted
+            if (player.getChips() == 0) {
+                pointer++;
+                continue;
+            }
+
+            int callAmount = highestBet - player.getCurrentBet();
+            Player.Action action = player.decideAction(state, callAmount);
+
+            // Handle negative raise amounts as zero (requirement 10.4)
+            // This is handled in the player's decideAction or we treat it here
+
+            switch (action) {
+                case FOLD:
+                    activePlayers.remove(index);
+                    if (activePlayers.size() == 1) {
+                        awardPot(activePlayers);
+                        return;
+                    }
+                    // Don't increment pointer - next player slides into this slot
+                    break;
+
+                case CHECK:
+                    if (callAmount > 0) {
+                        // Treat as CALL
+                        collectBet(player, callAmount);
+                    }
+                    acted++;
+                    pointer++;
+                    break;
+
+                case CALL:
+                    collectBet(player, callAmount);
+                    acted++;
+                    pointer++;
+                    break;
+
+                case RAISE:
+                    // Get raise amount from player
+                    int raiseAmount = getRaiseAmount(player);
+                    // Treat negative raise amounts as zero (requirement 10.4)
+                    if (raiseAmount < 0) {
+                        raiseAmount = 0;
+                    }
+                    if (raiseAmount < BIG_BLIND) {
+                        // Treat as CALL
+                        collectBet(player, callAmount);
+                        acted++;
+                        pointer++;
+                    } else {
+                        collectBet(player, raiseAmount);
+                        highestBet = player.getCurrentBet();
+                        lastRaiser = player;
+                        acted = 1; // Reset - this player has acted
+                        pointer++;
+                    }
+                    break;
+            }
+
+            // Termination: round ends when every active (non-all-in) player has acted
+            // since the last raise, and no unmatched bet remains
+            int eligibleCount = 0;
+            for (Player p : activePlayers) {
+                if (p.getChips() > 0) {
+                    eligibleCount++;
+                }
+            }
+
+            int currentIndex = pointer % activePlayers.size();
+            Player currentPlayer = activePlayers.get(currentIndex);
+
+            if (acted >= eligibleCount && (lastRaiser == null || currentPlayer == lastRaiser)) {
+                break;
+            }
+        }
+    }
+
+    private void awardPot(List<Player> winners) {
+        int pot = state.getPot();
+        if (winners.isEmpty() || pot == 0) {
+            state.resetPot();
+            return;
+        }
+
+        int share = pot / winners.size();
+        int remainder = pot % winners.size();
+
+        for (Player w : winners) {
+            w.setChips(w.getChips() + share);
+        }
+        // Remainder goes to first winner in seat order
+        winners.get(0).setChips(winners.get(0).getChips() + remainder);
+
+        state.resetPot();
     }
 
     public void dealFlop() {
