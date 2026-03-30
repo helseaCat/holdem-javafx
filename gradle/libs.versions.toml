@@ -3,8 +3,10 @@
 
 [versions]
 guava = "33.5.0-jre"
+jqwik = "1.9.2"
 junit-jupiter = "6.0.1"
 
 [libraries]
 guava = { module = "com.google.guava:guava", version.ref = "guava" }
+jqwik = { module = "net.jqwik:jqwik", version.ref = "jqwik" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit-jupiter" }
