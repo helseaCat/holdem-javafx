@@ -1,8 +1,10 @@
 package com.nekocatgato.ui;
 
+import com.nekocatgato.engine.GameController;
 import com.nekocatgato.engine.GameEventListener;
 import com.nekocatgato.model.Card;
 import com.nekocatgato.model.GameState;
+import com.nekocatgato.model.HumanPlayer;
 import com.nekocatgato.model.Player;
 
 import javafx.application.Platform;
@@ -16,8 +18,13 @@ import javafx.scene.layout.VBox;
 import javafx.scene.text.Text;
 import javafx.stage.Stage;
 
+import java.util.List;
+
 public class GameTableView implements GameEventListener {
     private final Stage stage;
+    private final GameController gameController;
+    private final List<Player> players;
+    private HumanPlayer humanPlayer;
 
     private HBox boardArea;
     private Text potText;
@@ -27,8 +34,17 @@ public class GameTableView implements GameEventListener {
     private Button callBtn;
     private Button raiseBtn;
 
-    public GameTableView(Stage stage) {
+    public GameTableView(Stage stage, GameController gameController, List<Player> players) {
         this.stage = stage;
+        this.gameController = gameController;
+        this.players = players;
+        // Find the HumanPlayer from the list
+        for (Player p : players) {
+            if (p instanceof HumanPlayer hp) {
+                this.humanPlayer = hp;
+                break;
+            }
+        }
     }
 
     public void show() {
@@ -47,6 +63,11 @@ public class GameTableView implements GameEventListener {
         raiseBtn = new Button("Raise");
         setActionButtonsDisabled(true);
 
+        foldBtn.setOnAction(e -> submitPlayerAction(Player.Action.FOLD, 0));
+        checkBtn.setOnAction(e -> submitPlayerAction(Player.Action.CHECK, 0));
+        callBtn.setOnAction(e -> submitPlayerAction(Player.Action.CALL, 0));
+        raiseBtn.setOnAction(e -> submitPlayerAction(Player.Action.RAISE, 0));
+
         HBox actions = new HBox(10, foldBtn, checkBtn, callBtn, raiseBtn);
         actions.setAlignment(Pos.CENTER);
         actions.setStyle("-fx-padding: 10;");
@@ -62,6 +83,10 @@ public class GameTableView implements GameEventListener {
         stage.setScene(new Scene(root, 1024, 768));
         stage.setTitle("Texas Hold'em — Table");
         stage.show();
+
+        // Wire up listener and start the async game loop
+        gameController.setGameEventListener(this);
+        gameController.startGameAsync(players);
     }
 
     // ---- GameEventListener implementation ----
@@ -111,6 +136,13 @@ public class GameTableView implements GameEventListener {
     }
 
     // ---- Helpers ----
+
+    private void submitPlayerAction(Player.Action action, int raiseAmount) {
+        if (humanPlayer != null) {
+            setActionButtonsDisabled(true);
+            humanPlayer.submitAction(action, raiseAmount);
+        }
+    }
 
     private void setActionButtonsDisabled(boolean disabled) {
         foldBtn.setDisable(disabled);
