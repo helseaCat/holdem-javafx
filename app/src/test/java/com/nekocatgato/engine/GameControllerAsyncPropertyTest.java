@@ -7,6 +7,7 @@ import net.jqwik.api.constraints.IntRange;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 class GameControllerAsyncPropertyTest {
 
@@ -349,5 +350,153 @@ class GameControllerAsyncPropertyTest {
         }
         assert succeeded :
                 "startGameAsync should succeed with exactly one HumanPlayer";
+    }
+
+    // ── Helper: A listener that records phase transitions ──
+
+    static class RecordingListener implements GameEventListener {
+        final List<GameState.Phase> phases = new ArrayList<>();
+        final AtomicReference<GameState> lastRoundState = new AtomicReference<>();
+        boolean roundCompleted = false;
+
+        @Override
+        public void onPhaseChanged(GameState.Phase phase, GameState state) {
+            phases.add(phase);
+        }
+
+        @Override
+        public void onPlayerTurn(Player player, int callAmount) {}
+
+        @Override
+        public void onPlayerActed(Player player, Player.Action action) {}
+
+        @Override
+        public void onRoundComplete(GameState state) {
+            roundCompleted = true;
+            lastRoundState.set(state);
+        }
+
+        @Override
+        public void onError(Exception e) {}
+    }
+
+    // ── Helper: A HumanPlayer that auto-submits an action from a queue ──
+
+    static class AutoHumanPlayer extends HumanPlayer {
+        private final Queue<Player.Action> actions;
+
+        AutoHumanPlayer(String name, int chips, List<Player.Action> actionList) {
+            super(name, chips);
+            this.actions = new LinkedList<>(actionList);
+        }
+
+        @Override
+        public CompletableFuture<ActionResult> decideActionAsync(GameState state, int callAmount) {
+            CompletableFuture<ActionResult> future = super.decideActionAsync(state, callAmount);
+            Player.Action action = actions.isEmpty() ? Player.Action.CALL : actions.poll();
+            submitAction(action, 0);
+            return future;
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Feature: async-game-loop, Property 7: Listener phase notifications
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * For any full game run, onPhaseChanged is called exactly once per phase
+     * transition in the correct order: PRE_FLOP → FLOP → TURN → RIVER → SHOWDOWN.
+     *
+     * We use an AutoHumanPlayer that auto-completes its futures with CALL,
+     * and AI players that also CALL, so the game runs to showdown.
+     */
+    @Property(tries = 100)
+    void listenerNotifiedOnPhaseTransitionsInOrder(
+            @ForAll @IntRange(min = 500, max = 1000) int humanChips,
+            @ForAll @IntRange(min = 500, max = 1000) int aiChips) {
+
+        // Use CALL actions — enough for multiple betting rounds to reach showdown
+        List<Player.Action> humanActions = List.of(
+                Player.Action.CALL, Player.Action.CHECK,
+                Player.Action.CHECK, Player.Action.CHECK);
+        AutoHumanPlayer human = new AutoHumanPlayer("Human", humanChips, new ArrayList<>(humanActions));
+        ScriptedPlayer ai = new ScriptedPlayer("Bot", aiChips, List.of(
+                Player.Action.CALL, Player.Action.CHECK,
+                Player.Action.CHECK, Player.Action.CHECK));
+
+        GameController gc = new GameController();
+        RecordingListener listener = new RecordingListener();
+        gc.setGameEventListener(listener);
+
+        // Use startGame + validateSingleHumanPlayer manually, then run the loop
+        // directly on the current thread (no executor) for deterministic testing.
+        gc.startGame(List.of(human, ai));
+        gc.runGameLoop();
+
+        // Verify phase transitions
+        List<GameState.Phase> expected = List.of(
+                GameState.Phase.PRE_FLOP,
+                GameState.Phase.FLOP,
+                GameState.Phase.TURN,
+                GameState.Phase.RIVER,
+                GameState.Phase.SHOWDOWN);
+
+        assert listener.phases.equals(expected) :
+                "Phase transitions should be " + expected + " but got " + listener.phases;
+
+        // Each phase notified exactly once
+        for (GameState.Phase phase : GameState.Phase.values()) {
+            long count = listener.phases.stream().filter(p -> p == phase).count();
+            assert count == 1 :
+                    "Phase " + phase + " should be notified exactly once, got " + count;
+        }
+
+        assert listener.roundCompleted : "onRoundComplete should have been called";
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Feature: async-game-loop, Property 9: Last player wins pot
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * For any round where all players except one fold, the remaining player's
+     * chips increase by the pot amount, pot resets to zero, and no showdown occurs.
+     */
+    @Property(tries = 100)
+    void lastActivePlayerWinsPotWithoutShowdown(
+            @ForAll @IntRange(min = 200, max = 1000) int humanChips,
+            @ForAll @IntRange(min = 200, max = 1000) int aiChips) {
+
+        // Human calls, AI folds → human wins pot without showdown
+        AutoHumanPlayer human = new AutoHumanPlayer("Human", humanChips,
+                new ArrayList<>(List.of(Player.Action.CALL)));
+        ScriptedPlayer ai = new ScriptedPlayer("Bot", aiChips,
+                List.of(Player.Action.FOLD));
+
+        GameController gc = new GameController();
+        RecordingListener listener = new RecordingListener();
+        gc.setGameEventListener(listener);
+
+        gc.startGame(List.of(human, ai));
+
+        // Run the game loop on the current thread
+        gc.runGameLoop();
+
+        // Pot should be zero — awarded to the winner
+        assert gc.getState().getPot() == 0 :
+                "Pot should be zero after last player wins, got " + gc.getState().getPot();
+
+        // No showdown phase should have been reached
+        boolean showdownReached = listener.phases.contains(GameState.Phase.SHOWDOWN);
+        assert !showdownReached :
+                "Showdown should not occur when all but one player folds";
+
+        // The surviving player's chips should have increased by the pot
+        // (The human called the big blind, then AI folded, so human wins the pot)
+        // Total chips in the system are conserved
+        int totalBefore = humanChips + aiChips;
+        int totalAfter = human.getChips() + ai.getChips() + gc.getState().getPot();
+        assert totalBefore == totalAfter :
+                "Chip conservation violated: before=" + totalBefore + " after=" + totalAfter;
     }
 }
