@@ -18,7 +18,10 @@ import javafx.scene.layout.VBox;
 import javafx.scene.text.Text;
 import javafx.stage.Stage;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class GameTableView implements GameEventListener {
     private final Stage stage;
@@ -34,10 +37,14 @@ public class GameTableView implements GameEventListener {
     private Button callBtn;
     private Button raiseBtn;
 
+    private final Map<Player, VBox> playerCardAreas = new HashMap<>();
+    private final List<Player> allPlayers;
+
     public GameTableView(Stage stage, GameController gameController, List<Player> players) {
         this.stage = stage;
         this.gameController = gameController;
         this.players = players;
+        this.allPlayers = new ArrayList<>(players);
         // Find the HumanPlayer from the list
         for (Player p : players) {
             if (p instanceof HumanPlayer hp) {
@@ -68,17 +75,11 @@ public class GameTableView implements GameEventListener {
         callBtn.setOnAction(e -> submitPlayerAction(Player.Action.CALL, 0));
         raiseBtn.setOnAction(e -> submitPlayerAction(Player.Action.RAISE, 0));
 
-        HBox actions = new HBox(10, foldBtn, checkBtn, callBtn, raiseBtn);
-        actions.setAlignment(Pos.CENTER);
-        actions.setStyle("-fx-padding: 10;");
-        root.setBottom(actions);
-
         // Pot and status display
         potText = new Text("Pot: $0");
         statusText = new Text("");
-        VBox topBar = new VBox(5, potText, statusText);
-        topBar.setAlignment(Pos.CENTER);
-        root.setTop(topBar);
+
+        buildPlayerAreas(root);
 
         stage.setScene(new Scene(root, 1024, 768));
         stage.setTitle("Texas Hold'em — Table");
@@ -87,6 +88,82 @@ public class GameTableView implements GameEventListener {
         // Wire up listener and start the async game loop
         gameController.setGameEventListener(this);
         gameController.startGameAsync(players);
+    }
+
+    private void buildPlayerAreas(BorderPane root) {
+        playerCardAreas.clear();
+
+        List<Player> aiPlayers = new ArrayList<>();
+        for (Player p : allPlayers) {
+            // Create a VBox for each player: name, chips, card HBox
+            Text nameText = new Text(p.getName());
+            Text chipText = new Text("Chips: $" + p.getChips());
+            HBox cardBox = new HBox(5);
+            cardBox.setAlignment(Pos.CENTER);
+
+            VBox playerBox = new VBox(5, nameText, chipText, cardBox);
+            playerBox.setAlignment(Pos.CENTER);
+            playerBox.setStyle("-fx-padding: 10;");
+
+            playerCardAreas.put(p, playerBox);
+
+            if (!(p instanceof HumanPlayer)) {
+                aiPlayers.add(p);
+            }
+        }
+
+        // Bottom: human player's card area + action buttons
+        if (humanPlayer != null) {
+            VBox humanBox = playerCardAreas.get(humanPlayer);
+            HBox actions = new HBox(10, foldBtn, checkBtn, callBtn, raiseBtn);
+            actions.setAlignment(Pos.CENTER);
+            actions.setStyle("-fx-padding: 10;");
+
+            VBox bottomArea = new VBox(10, humanBox, actions);
+            bottomArea.setAlignment(Pos.CENTER);
+            root.setBottom(bottomArea);
+        }
+
+        // Distribute AI players across top, left, and right
+        // Top gets pot/status bar + first AI player(s)
+        VBox topBar = new VBox(5, potText, statusText);
+        topBar.setAlignment(Pos.CENTER);
+
+        if (!aiPlayers.isEmpty()) {
+            // First AI player goes to top (alongside pot/status)
+            HBox topPlayers = new HBox(20);
+            topPlayers.setAlignment(Pos.CENTER);
+            topPlayers.getChildren().add(playerCardAreas.get(aiPlayers.get(0)));
+
+            // If there are 4+ AI players, put the second one at top too
+            if (aiPlayers.size() >= 4) {
+                topPlayers.getChildren().add(playerCardAreas.get(aiPlayers.get(1)));
+            }
+
+            VBox topArea = new VBox(10, topBar, topPlayers);
+            topArea.setAlignment(Pos.CENTER);
+            root.setTop(topArea);
+
+            // Distribute remaining AI players to left and right
+            int nextIndex = (aiPlayers.size() >= 4) ? 2 : 1;
+
+            if (nextIndex < aiPlayers.size()) {
+                VBox leftArea = new VBox(10);
+                leftArea.setAlignment(Pos.CENTER);
+                leftArea.getChildren().add(playerCardAreas.get(aiPlayers.get(nextIndex)));
+                root.setLeft(leftArea);
+                nextIndex++;
+            }
+
+            if (nextIndex < aiPlayers.size()) {
+                VBox rightArea = new VBox(10);
+                rightArea.setAlignment(Pos.CENTER);
+                rightArea.getChildren().add(playerCardAreas.get(aiPlayers.get(nextIndex)));
+                root.setRight(rightArea);
+            }
+        } else {
+            root.setTop(topBar);
+        }
     }
 
     // ---- GameEventListener implementation ----
