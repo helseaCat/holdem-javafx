@@ -182,6 +182,10 @@ public class GameTableView implements GameEventListener {
         Platform.runLater(() -> {
             statusText.setText(player.getName() + ": " + action);
             setActionButtonsDisabled(true);
+            if (action == Player.Action.FOLD) {
+                removePlayerCards(player);
+            }
+            updateChipDisplays();
         });
     }
 
@@ -191,6 +195,7 @@ public class GameTableView implements GameEventListener {
             potText.setText("Pot: $" + state.getPot());
             updateBoardDisplay(state);
             updateHoleCardDisplay(phase);
+            updateChipDisplays();
             statusText.setText(phase.toString());
         });
     }
@@ -234,6 +239,25 @@ public class GameTableView implements GameEventListener {
         boardArea.getChildren().clear();
         for (Card card : state.getBoard().getCards()) {
             boardArea.getChildren().add(new CardView(card));
+        }
+    }
+
+    private void removePlayerCards(Player player) {
+        VBox playerBox = playerCardAreas.get(player);
+        if (playerBox == null) return;
+
+        // The card HBox is the last child of the VBox
+        HBox cardBox = (HBox) playerBox.getChildren().getLast();
+        cardBox.getChildren().clear();
+    }
+
+    private void updateChipDisplays() {
+        for (Map.Entry<Player, VBox> entry : playerCardAreas.entrySet()) {
+            Player player = entry.getKey();
+            VBox playerBox = entry.getValue();
+            // Chip text is the second child (index 1) of the VBox
+            Text chipText = (Text) playerBox.getChildren().get(1);
+            chipText.setText("Chips: $" + player.getChips());
         }
     }
 
