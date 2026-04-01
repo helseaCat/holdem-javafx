@@ -2,6 +2,7 @@ package com.nekocatgato.ui;
 
 import com.nekocatgato.engine.GameController;
 import com.nekocatgato.engine.GameEventListener;
+import com.nekocatgato.model.AIPlayer;
 import com.nekocatgato.model.Card;
 import com.nekocatgato.model.GameState;
 import com.nekocatgato.model.HumanPlayer;
@@ -189,6 +190,7 @@ public class GameTableView implements GameEventListener {
         Platform.runLater(() -> {
             potText.setText("Pot: $" + state.getPot());
             updateBoardDisplay(state);
+            updateHoleCardDisplay(phase);
             statusText.setText(phase.toString());
         });
     }
@@ -232,6 +234,46 @@ public class GameTableView implements GameEventListener {
         boardArea.getChildren().clear();
         for (Card card : state.getBoard().getCards()) {
             boardArea.getChildren().add(new CardView(card));
+        }
+    }
+
+    private void updateHoleCardDisplay(GameState.Phase phase) {
+        if (phase == GameState.Phase.PRE_FLOP) {
+            for (Player player : allPlayers) {
+                VBox playerBox = playerCardAreas.get(player);
+                if (playerBox == null) continue;
+
+                // The card HBox is the last child of the VBox
+                HBox cardBox = (HBox) playerBox.getChildren().getLast();
+                cardBox.getChildren().clear();
+
+                List<Card> holeCards = player.getHand().getCards();
+                if (player instanceof HumanPlayer) {
+                    for (Card card : holeCards) {
+                        cardBox.getChildren().add(new CardView(card));
+                    }
+                } else if (player instanceof AIPlayer) {
+                    for (int i = 0; i < holeCards.size(); i++) {
+                        cardBox.getChildren().add(new CardView());
+                    }
+                }
+            }
+        } else if (phase == GameState.Phase.SHOWDOWN) {
+            for (Player player : allPlayers) {
+                if (!(player instanceof AIPlayer)) continue;
+
+                VBox playerBox = playerCardAreas.get(player);
+                if (playerBox == null) continue;
+
+                HBox cardBox = (HBox) playerBox.getChildren().getLast();
+                List<Card> holeCards = player.getHand().getCards();
+                if (holeCards.isEmpty()) continue;
+
+                cardBox.getChildren().clear();
+                for (Card card : holeCards) {
+                    cardBox.getChildren().add(new CardView(card));
+                }
+            }
         }
     }
 }
