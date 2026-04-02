@@ -85,6 +85,8 @@ public class GameTableView implements GameEventListener {
         potText = new Text("Pot: $0");
         phaseText = new Text("");
         statusText = new Text("");
+        dealerButtonText = new Text("D");
+        dealerButtonText.setStyle("-fx-font-weight: bold; -fx-fill: white; -fx-background-color: black;");
 
         buildPlayerAreas(root);
 
@@ -272,6 +274,75 @@ public class GameTableView implements GameEventListener {
             Text chipText = (Text) playerBox.getChildren().get(1);
             chipText.setText("Chips: $" + player.getChips());
         }
+    }
+
+    private void updateBetDisplays() {
+        for (Map.Entry<Player, Text> entry : betLabels.entrySet()) {
+            Player player = entry.getKey();
+            Text betLabel = entry.getValue();
+            int bet = player.getCurrentBet();
+            if (bet > 0) {
+                betLabel.setText("Bet: $" + bet);
+                betLabel.setVisible(true);
+            } else {
+                betLabel.setVisible(false);
+            }
+        }
+    }
+
+    private void updateDealerButton() {
+        // Remove from current parent (if any)
+        if (dealerButtonText.getParent() instanceof VBox parent) {
+            parent.getChildren().remove(dealerButtonText);
+        }
+
+        List<Player> allPlayersList = gameController.getPlayers();
+        int dealerIndex = gameController.getDealerButtonIndex();
+
+        // Defensive bounds check
+        if (dealerIndex < 0 || dealerIndex >= allPlayersList.size()) {
+            return;
+        }
+
+        Player dealer = allPlayersList.get(dealerIndex);
+        VBox dealerBox = playerCardAreas.get(dealer);
+        if (dealerBox != null) {
+            dealerBox.getChildren().add(dealerButtonText);
+        }
+    }
+
+    private void applyTurnHighlight(Player player) {
+        removeTurnHighlight();
+        VBox playerBox = playerCardAreas.get(player);
+        if (playerBox != null) {
+            playerBox.setStyle("-fx-border-color: gold; -fx-border-width: 2;");
+            highlightedPlayer = player;
+        }
+    }
+
+    private void removeTurnHighlight() {
+        if (highlightedPlayer != null) {
+            VBox box = playerCardAreas.get(highlightedPlayer);
+            if (box != null) {
+                box.setStyle("");
+            }
+            highlightedPlayer = null;
+        }
+    }
+
+    private void updatePhaseDisplay(GameState.Phase phase) {
+        String label = switch (phase) {
+            case PRE_FLOP -> "PRE-FLOP";
+            case FLOP -> "FLOP";
+            case TURN -> "TURN";
+            case RIVER -> "RIVER";
+            case SHOWDOWN -> "SHOWDOWN";
+        };
+        phaseText.setText(label);
+    }
+
+    private void updatePotDisplay(int potAmount) {
+        potText.setText("Pot: $" + potAmount);
     }
 
     private void clearAllCardDisplays() {
