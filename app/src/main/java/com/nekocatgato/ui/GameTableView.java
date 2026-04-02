@@ -205,6 +205,7 @@ public class GameTableView implements GameEventListener {
         Platform.runLater(() -> {
             potText.setText("Pot: $" + state.getPot());
             statusText.setText("Round complete");
+            clearAllCardDisplays();
         });
     }
 
@@ -259,6 +260,14 @@ public class GameTableView implements GameEventListener {
             Text chipText = (Text) playerBox.getChildren().get(1);
             chipText.setText("Chips: $" + player.getChips());
         }
+    }
+
+    private void clearAllCardDisplays() {
+        for (VBox playerBox : playerCardAreas.values()) {
+            HBox cardBox = (HBox) playerBox.getChildren().getLast();
+            cardBox.getChildren().clear();
+        }
+        boardArea.getChildren().clear();
     }
 
     private void updateHoleCardDisplay(GameState.Phase phase) {
