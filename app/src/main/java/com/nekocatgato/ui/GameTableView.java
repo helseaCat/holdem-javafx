@@ -39,7 +39,12 @@ public class GameTableView implements GameEventListener {
     private Button raiseBtn;
 
     private final Map<Player, VBox> playerCardAreas = new HashMap<>();
+    private final Map<Player, Text> betLabels = new HashMap<>();
     private final List<Player> allPlayers;
+
+    private Text phaseText;
+    private Text dealerButtonText;
+    private Player highlightedPlayer;
 
     public GameTableView(Stage stage, GameController gameController, List<Player> players) {
         this.stage = stage;
@@ -76,8 +81,9 @@ public class GameTableView implements GameEventListener {
         callBtn.setOnAction(e -> submitPlayerAction(Player.Action.CALL, 0));
         raiseBtn.setOnAction(e -> submitPlayerAction(Player.Action.RAISE, 0));
 
-        // Pot and status display
+        // Pot, phase, and status display
         potText = new Text("Pot: $0");
+        phaseText = new Text("");
         statusText = new Text("");
 
         buildPlayerAreas(root);
@@ -93,16 +99,22 @@ public class GameTableView implements GameEventListener {
 
     private void buildPlayerAreas(BorderPane root) {
         playerCardAreas.clear();
+        betLabels.clear();
 
         List<Player> aiPlayers = new ArrayList<>();
         for (Player p : allPlayers) {
-            // Create a VBox for each player: name, chips, card HBox
+            // Create a VBox for each player: name, chips, bet label, card HBox
             Text nameText = new Text(p.getName());
             Text chipText = new Text("Chips: $" + p.getChips());
+
+            Text betLabel = new Text();
+            betLabel.setVisible(false);
+            betLabels.put(p, betLabel);
+
             HBox cardBox = new HBox(5);
             cardBox.setAlignment(Pos.CENTER);
 
-            VBox playerBox = new VBox(5, nameText, chipText, cardBox);
+            VBox playerBox = new VBox(5, nameText, chipText, betLabel, cardBox);
             playerBox.setAlignment(Pos.CENTER);
             playerBox.setStyle("-fx-padding: 10;");
 
@@ -127,7 +139,7 @@ public class GameTableView implements GameEventListener {
 
         // Distribute AI players across top, left, and right
         // Top gets pot/status bar + first AI player(s)
-        VBox topBar = new VBox(5, potText, statusText);
+        VBox topBar = new VBox(5, potText, phaseText, statusText);
         topBar.setAlignment(Pos.CENTER);
 
         if (!aiPlayers.isEmpty()) {
