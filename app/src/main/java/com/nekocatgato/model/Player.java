@@ -1,5 +1,7 @@
 package com.nekocatgato.model;
 
+import java.util.concurrent.CompletableFuture;
+
 public abstract class Player {
     private final String name;
     private int chips;
@@ -24,6 +26,16 @@ public abstract class Player {
     }
 
     public abstract Action decideAction(GameState state, int callAmount);
+
+    /**
+     * Async action resolution. Returns a future that completes with the
+     * player's chosen action and optional raise amount.
+     * Default implementation wraps decideAction() in a completed future.
+     */
+    public CompletableFuture<ActionResult> decideActionAsync(GameState state, int callAmount) {
+        Action action = decideAction(state, callAmount);
+        return CompletableFuture.completedFuture(new ActionResult(action, 0));
+    }
 
     public enum Action { FOLD, CHECK, CALL, RAISE }
 }

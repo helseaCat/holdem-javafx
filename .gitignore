@@ -7,6 +7,9 @@ docs
 # Ignore compiled class output
 app/bin
 
+# Ignore jqwik database
+.jqwik-database
+
 # Ignore Gradle project-specific cache directory
 .gradle
 

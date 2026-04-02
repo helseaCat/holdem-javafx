@@ -3,6 +3,11 @@ package com.nekocatgato.engine;
 import com.nekocatgato.model.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class GameController {
     public static final int BIG_BLIND = 20;
@@ -15,6 +20,16 @@ public class GameController {
     private int dealerButtonIndex = -1;
     private boolean gameOver;
     private Player gameWinner;
+    private GameEventListener listener;
+    private final ExecutorService engineExecutor = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "EngineThread");
+        t.setDaemon(true);
+        return t;
+    });
+
+    public void setGameEventListener(GameEventListener listener) {
+        this.listener = listener;
+    }
 
     public void startGame(List<Player> players) {
         if (players == null) {
@@ -34,6 +49,30 @@ public class GameController {
         this.players = new ArrayList<>(players);
         this.dealerButtonIndex = -1;
         nextRound();
+    }
+
+    public void startGameAsync(List<Player> players) {
+        startGame(players);
+        validateSingleHumanPlayer(this.players);
+        engineExecutor.submit(this::runGameLoop);
+    }
+
+    private void validateSingleHumanPlayer(List<Player> players) {
+        long humanCount = players.stream().filter(p -> p instanceof HumanPlayer).count();
+        if (humanCount != 1) {
+            throw new IllegalArgumentException("Exactly one HumanPlayer required, got " + humanCount);
+        }
+    }
+    ActionResult resolveAction(Player player, GameState state, int callAmount) {
+        try {
+            CompletableFuture<ActionResult> future = player.decideActionAsync(state, callAmount);
+            return future.get();
+        } catch (ExecutionException | CancellationException e) {
+            return new ActionResult(Player.Action.FOLD, 0);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new GameLoopInterruptedException(e);
+        }
     }
 
     public void nextRound() {
@@ -216,6 +255,116 @@ public class GameController {
         }
     }
 
+    void runBettingRoundAsync(int firstToActIndex) {
+        if (activePlayers.size() <= 1) {
+            return;
+        }
+
+        int highestBet = 0;
+        for (Player p : activePlayers) {
+            highestBet = Math.max(highestBet, p.getCurrentBet());
+        }
+
+        Player lastRaiser = null;
+        int pointer = firstToActIndex;
+        int acted = 0;
+
+        while (true) {
+            if (activePlayers.size() == 1) {
+                int pot = state.getPot();
+                Player winner = activePlayers.get(0);
+                winner.setChips(winner.getChips() + pot);
+                state.resetPot();
+                eliminateBrokePlayers();
+                return;
+            }
+
+            int index = pointer % activePlayers.size();
+            Player player = activePlayers.get(index);
+
+            // Skip all-in players (0 chips) without calling decideActionAsync
+            if (player.getChips() == 0) {
+                pointer++;
+                continue;
+            }
+
+            int callAmount = highestBet - player.getCurrentBet();
+
+            // Notify listener before human turns
+            if (player instanceof HumanPlayer && listener != null) {
+                listener.onPlayerTurn(player, callAmount);
+            }
+
+            ActionResult result = resolveAction(player, state, callAmount);
+            Player.Action action = result.action();
+
+            // Notify listener after each action
+            if (listener != null) {
+                listener.onPlayerActed(player, action);
+            }
+
+            switch (action) {
+                case FOLD:
+                    activePlayers.remove(index);
+                    if (activePlayers.size() == 1) {
+                        int pot = state.getPot();
+                        Player winner = activePlayers.get(0);
+                        winner.setChips(winner.getChips() + pot);
+                        state.resetPot();
+                        eliminateBrokePlayers();
+                        return;
+                    }
+                    break;
+
+                case CHECK:
+                    if (callAmount > 0) {
+                        collectBet(player, callAmount);
+                    }
+                    acted++;
+                    pointer++;
+                    break;
+
+                case CALL:
+                    collectBet(player, callAmount);
+                    acted++;
+                    pointer++;
+                    break;
+
+                case RAISE:
+                    int raiseAmount = result.raiseAmount();
+                    if (raiseAmount < 0) {
+                        raiseAmount = 0;
+                    }
+                    if (raiseAmount < BIG_BLIND) {
+                        collectBet(player, callAmount);
+                        acted++;
+                        pointer++;
+                    } else {
+                        collectBet(player, raiseAmount);
+                        highestBet = player.getCurrentBet();
+                        lastRaiser = player;
+                        acted = 1;
+                        pointer++;
+                    }
+                    break;
+            }
+
+            int eligibleCount = 0;
+            for (Player p : activePlayers) {
+                if (p.getChips() > 0) {
+                    eligibleCount++;
+                }
+            }
+
+            int currentIndex = pointer % activePlayers.size();
+            Player currentPlayer = activePlayers.get(currentIndex);
+
+            if (acted >= eligibleCount && (lastRaiser == null || currentPlayer == lastRaiser)) {
+                break;
+            }
+        }
+    }
+
     public void dealFlop() {
         if (state.getPhase() != GameState.Phase.PRE_FLOP) {
             throw new IllegalStateException("dealFlop() requires PRE_FLOP phase, but current phase is " + state.getPhase());
@@ -312,6 +461,71 @@ public class GameController {
         eliminateBrokePlayers();
 
         return winners.get(0);
+    }
+
+    void runGameLoop() {
+        try {
+            // Pre-flop betting (blinds already posted, hole cards dealt by nextRound/startGame)
+            notifyPhaseChanged(GameState.Phase.PRE_FLOP);
+            int firstToAct = (dealerButtonIndex + 3) % activePlayers.size();
+            runBettingRoundAsync(firstToAct);
+            if (activePlayers.size() <= 1) { notifyRoundComplete(); return; }
+
+            // Flop
+            for (int i = 0; i < 3; i++) {
+                state.getBoard().addCard(state.getDeck().deal());
+            }
+            resetPlayerBets();
+            state.setPhase(GameState.Phase.FLOP);
+            notifyPhaseChanged(GameState.Phase.FLOP);
+            runBettingRoundAsync((dealerButtonIndex + 1) % activePlayers.size());
+            if (activePlayers.size() <= 1) { notifyRoundComplete(); return; }
+
+            // Turn
+            state.getBoard().addCard(state.getDeck().deal());
+            resetPlayerBets();
+            state.setPhase(GameState.Phase.TURN);
+            notifyPhaseChanged(GameState.Phase.TURN);
+            runBettingRoundAsync((dealerButtonIndex + 1) % activePlayers.size());
+            if (activePlayers.size() <= 1) { notifyRoundComplete(); return; }
+
+            // River
+            state.getBoard().addCard(state.getDeck().deal());
+            resetPlayerBets();
+            state.setPhase(GameState.Phase.RIVER);
+            notifyPhaseChanged(GameState.Phase.RIVER);
+            runBettingRoundAsync((dealerButtonIndex + 1) % activePlayers.size());
+            if (activePlayers.size() <= 1) { notifyRoundComplete(); return; }
+
+            // Showdown
+            state.setPhase(GameState.Phase.SHOWDOWN);
+            notifyPhaseChanged(GameState.Phase.SHOWDOWN);
+            determineWinner();
+            notifyRoundComplete();
+        } catch (GameLoopInterruptedException e) {
+            // Engine thread interrupted — terminate gracefully
+            notifyError(e);
+        } catch (Exception e) {
+            notifyError(e);
+        }
+    }
+
+    private void notifyPhaseChanged(GameState.Phase phase) {
+        if (listener != null) {
+            listener.onPhaseChanged(phase, state);
+        }
+    }
+
+    private void notifyRoundComplete() {
+        if (listener != null) {
+            listener.onRoundComplete(state);
+        }
+    }
+
+    private void notifyError(Exception e) {
+        if (listener != null) {
+            listener.onError(e);
+        }
     }
 
     public GameState getState() { return state; }

@@ -11,13 +11,15 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class GameControllerTest {
     private GameController controller;
+    private HumanPlayer human;
+    private AIPlayer ai;
     private List<Player> players;
 
     @BeforeEach
     void setUp() {
         controller = new GameController();
-        HumanPlayer human = new HumanPlayer("Player", 1000);
-        AIPlayer ai = new AIPlayer("AI", 1000);
+        human = new HumanPlayer("Player", 1000);
+        ai = new AIPlayer("AI", 1000);
         players = List.of(human, ai);
     }
 
@@ -313,25 +315,18 @@ class GameControllerTest {
     // Community card dealing tests (Task 7)
 
     private void setupAllPlayersCheckOrCall() {
-        // Set up both players to check/call to avoid folding
-        for (Player p : players) {
-            if (p instanceof HumanPlayer) {
-                ((HumanPlayer) p).setPendingAction(Player.Action.CHECK, 0);
-            } else if (p instanceof AIPlayer) {
-                // AIPlayer uses decideAction directly, which already checks/calls
-                // No setup needed for AIPlayer
-            }
-        }
-    }
-
-    private void setupAllPlayersCheckOrCallForController(GameController controller) {
-        // Set up both players to check/call to avoid folding
         for (Player p : controller.getActivePlayers()) {
             if (p instanceof HumanPlayer) {
                 ((HumanPlayer) p).setPendingAction(Player.Action.CHECK, 0);
             }
-            // AIPlayer uses decideAction directly, which already checks/calls
         }
+    }
+
+    private void clearDealtCards(GameController controller) {
+        for (Player p : controller.getActivePlayers()) {
+            p.getHand().clear();
+        }
+        controller.getState().getBoard().clear();
     }
 
     @Test
@@ -474,22 +469,15 @@ class GameControllerTest {
     void phaseTransitionsToShowdownAfterRiverBetting() {
         controller.startGame(players);
         setupAllPlayersCheckOrCall();
-        
-        // Need to ensure both players stay in (not fold)
-        // We'll use AI that checks/calls
+
         controller.dealFlop();
         assertEquals(GameState.Phase.FLOP, controller.getState().getPhase());
-        
+
         controller.dealTurn();
         assertEquals(GameState.Phase.TURN, controller.getState().getPhase());
-        
+
         controller.dealRiver();
-        
-        // After river betting (if more than 1 player), should be SHOWDOWN
-        // Since we have 2 players and they haven't folded, should be SHOWDOWN
-        if (controller.getActivePlayers().size() > 1) {
-            assertEquals(GameState.Phase.SHOWDOWN, controller.getState().getPhase());
-        }
+        assertEquals(GameState.Phase.SHOWDOWN, controller.getState().getPhase());
     }
 
     // Task 8: Showdown and winner determination tests
@@ -505,148 +493,86 @@ class GameControllerTest {
 
     @Test
     void determineWinnerReturnsWinnerWithHighestHandRank() {
-        // Create players with known hands
-        HumanPlayer player1 = new HumanPlayer("Player1", 1000);
-        AIPlayer player2 = new AIPlayer("Player2", 1000);
-        
-        // Player 1 will have a pair of Aces (better hand)
-        // Player 2 will have a pair of Kings (worse hand)
-        // We need to manually set up the hands for testing
-        
-        List<Player> twoPlayers = List.of(player1, player2);
-        controller.startGame(twoPlayers);
-        setupAllPlayersCheckOrCallForController(controller);
-        
-        // Deal through to showdown
-        controller.dealFlop();
-        controller.dealTurn();
-        controller.dealRiver();
-        
-        // Now in SHOWDOWN phase
-        assertEquals(GameState.Phase.SHOWDOWN, controller.getState().getPhase());
-        
-        // Determine winner - should not throw
+        controller.startGame(players);
+
+        clearDealtCards(controller);
+
+        human.getHand().addCard(new Card(Card.Suit.HEARTS, Card.Rank.ACE));
+        human.getHand().addCard(new Card(Card.Suit.SPADES, Card.Rank.ACE));
+
+        ai.getHand().addCard(new Card(Card.Suit.CLUBS, Card.Rank.THREE));
+        ai.getHand().addCard(new Card(Card.Suit.DIAMONDS, Card.Rank.FOUR));
+
+        controller.getState().getBoard().addCard(new Card(Card.Suit.DIAMONDS, Card.Rank.NINE));
+        controller.getState().getBoard().addCard(new Card(Card.Suit.CLUBS, Card.Rank.SEVEN));
+        controller.getState().getBoard().addCard(new Card(Card.Suit.SPADES, Card.Rank.FIVE));
+        controller.getState().getBoard().addCard(new Card(Card.Suit.HEARTS, Card.Rank.JACK));
+        controller.getState().getBoard().addCard(new Card(Card.Suit.DIAMONDS, Card.Rank.TWO));
+
+        controller.getState().setPhase(GameState.Phase.SHOWDOWN);
+
         Player winner = controller.determineWinner();
-        assertNotNull(winner);
+        assertEquals(human, winner);
     }
 
     @Test
     void splitPotDistributesCorrectlyWithRemainderToFirstSeat() {
-        HumanPlayer player1 = new HumanPlayer("Player1", 1000);
-        AIPlayer player2 = new AIPlayer("Player2", 1000);
-        List<Player> twoPlayers = List.of(player1, player2);
-        
-        controller.startGame(twoPlayers);
-        
-        // Manually add to pot to create a split pot scenario
-        // Add 100 chips to pot (50 from each player conceptually)
-        controller.getState().addToPot(100);
-        
-        // Simulate both players having equal hands by using findWinners directly
-        // For this test, we'll verify the awardPot logic directly
-        
-        // Reset player bets to simulate equal contribution
-        player1.setCurrentBet(50);
-        player2.setCurrentBet(50);
-        
-        // Call determineWinner which will call findWinners and awardPot
-        // Since both players have same chips and no clear winner from evaluate,
-        // we need to set up a scenario where they tie
-        
-        // Actually, let's just test the awardPot logic by calling dealFlop/Turn/River
-        // to get to showdown, then determineWinner
-        setupAllPlayersCheckOrCallForController(controller);
-        controller.dealFlop();
-        controller.dealTurn();
-        controller.dealRiver();
-        
-        int potBefore = controller.getState().getPot();
-        
-        Player winner = controller.determineWinner();
-        
-        // Pot should be reset to zero after award
+        controller.startGame(players);
+
+        clearDealtCards(controller);
+
+        human.getHand().addCard(new Card(Card.Suit.HEARTS, Card.Rank.ACE));
+        human.getHand().addCard(new Card(Card.Suit.DIAMONDS, Card.Rank.KING));
+
+        ai.getHand().addCard(new Card(Card.Suit.SPADES, Card.Rank.ACE));
+        ai.getHand().addCard(new Card(Card.Suit.CLUBS, Card.Rank.KING));
+
+        controller.getState().getBoard().addCard(new Card(Card.Suit.DIAMONDS, Card.Rank.NINE));
+        controller.getState().getBoard().addCard(new Card(Card.Suit.CLUBS, Card.Rank.SEVEN));
+        controller.getState().getBoard().addCard(new Card(Card.Suit.SPADES, Card.Rank.FIVE));
+        controller.getState().getBoard().addCard(new Card(Card.Suit.HEARTS, Card.Rank.THREE));
+        controller.getState().getBoard().addCard(new Card(Card.Suit.DIAMONDS, Card.Rank.TWO));
+
+        human.setChips(1000);
+        ai.setChips(1000);
+        controller.getState().resetPot();
+        controller.getState().addToPot(101);
+        controller.getState().setPhase(GameState.Phase.SHOWDOWN);
+
+        controller.determineWinner();
+
         assertEquals(0, controller.getState().getPot());
-        
-        // Winner should have received the pot
-        assertTrue(winner.getChips() > 1000);
+        assertEquals(1051, human.getChips());
+        assertEquals(1050, ai.getChips());
     }
 
     @Test
     void potResetsToZeroAfterAward() {
-        HumanPlayer player1 = new HumanPlayer("Player1", 1000);
-        AIPlayer player2 = new AIPlayer("Player2", 1000);
-        List<Player> twoPlayers = List.of(player1, player2);
-        
-        controller.startGame(twoPlayers);
-        setupAllPlayersCheckOrCallForController(controller);
-        
-        // Get to showdown
-        controller.dealFlop();
-        controller.dealTurn();
-        controller.dealRiver();
-        
-        int potBefore = controller.getState().getPot();
-        assertTrue(potBefore > 0); // Should have some money in pot
-        
+        controller.startGame(players);
+
+        clearDealtCards(controller);
+
+        human.getHand().addCard(new Card(Card.Suit.HEARTS, Card.Rank.ACE));
+        human.getHand().addCard(new Card(Card.Suit.SPADES, Card.Rank.ACE));
+
+        ai.getHand().addCard(new Card(Card.Suit.CLUBS, Card.Rank.THREE));
+        ai.getHand().addCard(new Card(Card.Suit.DIAMONDS, Card.Rank.FOUR));
+
+        controller.getState().getBoard().addCard(new Card(Card.Suit.DIAMONDS, Card.Rank.NINE));
+        controller.getState().getBoard().addCard(new Card(Card.Suit.CLUBS, Card.Rank.SEVEN));
+        controller.getState().getBoard().addCard(new Card(Card.Suit.SPADES, Card.Rank.FIVE));
+        controller.getState().getBoard().addCard(new Card(Card.Suit.HEARTS, Card.Rank.JACK));
+        controller.getState().getBoard().addCard(new Card(Card.Suit.DIAMONDS, Card.Rank.TWO));
+
+        controller.getState().resetPot();
+        controller.getState().addToPot(200);
+        controller.getState().setPhase(GameState.Phase.SHOWDOWN);
+
+        assertTrue(controller.getState().getPot() > 0);
+
         controller.determineWinner();
-        
-        // Pot should be zero after award
+
         assertEquals(0, controller.getState().getPot());
-    }
-
-    @Test
-    void winnerHasHighestHandRankInControlledSetup() {
-        // This test verifies that the winner determination uses HandEvaluator correctly
-        // We'll create a scenario where we know which player should win
-        
-        HumanPlayer player1 = new HumanPlayer("Player1", 1000);
-        AIPlayer player2 = new AIPlayer("Player2", 1000);
-        List<Player> twoPlayers = List.of(player1, player2);
-        
-        controller.startGame(twoPlayers);
-        
-        // Get to showdown
-        setupAllPlayersCheckOrCallForController(controller);
-        controller.dealFlop();
-        controller.dealTurn();
-        controller.dealRiver();
-        
-        // Verify we're in SHOWDOWN
-        assertEquals(GameState.Phase.SHOWDOWN, controller.getState().getPhase());
-        
-        // Determine winner
-        Player winner = controller.determineWinner();
-        
-        // The winner should be one of the players
-        assertTrue(winner == player1 || winner == player2);
-        
-        // After determineWinner, eliminateBrokePlayers is called
-        // Since both players started with 1000 and the pot is distributed,
-        // both should still have chips > 0
-    }
-
-    @Test
-    void eliminateBrokePlayersRemovesZeroChipPlayers() {
-        HumanPlayer player1 = new HumanPlayer("Player1", 1000);
-        AIPlayer player2 = new AIPlayer("Player2", 1000);
-        List<Player> twoPlayers = List.of(player1, player2);
-        
-        controller.startGame(twoPlayers);
-        
-        // Manually set one player to zero chips
-        player2.setChips(0);
-        
-        // Call eliminateBrokePlayers through determineWinner at showdown
-        setupAllPlayersCheckOrCallForController(controller);
-        controller.dealFlop();
-        controller.dealTurn();
-        controller.dealRiver();
-        
-        controller.determineWinner();
-        
-        // Player with 0 chips should be removed from players list
-        // Note: eliminateBrokePlayers is called after awardPot in determineWinner
-        // But since player2 already had 0 chips before the round, they should be removed
     }
 
     // Task 9: Player elimination and game-over detection tests
@@ -655,7 +581,6 @@ class GameControllerTest {
     void eliminateBrokePlayersRemovesZeroChipsFromPlayersList() {
         controller.startGame(players);
 
-        // Rig chip counts: player at index 1 is broke
         controller.getPlayers().get(1).setChips(0);
 
         controller.eliminateBrokePlayers();
@@ -668,7 +593,6 @@ class GameControllerTest {
     void gameOverTrueAndWinnerSetWhenOnePlayerRemains() {
         controller.startGame(players);
 
-        // Rig chip counts: only first player has chips
         controller.getPlayers().get(1).setChips(0);
 
         controller.eliminateBrokePlayers();
@@ -679,27 +603,31 @@ class GameControllerTest {
 
     @Test
     void chipConservationHoldsAcrossFullRound() {
-        HumanPlayer player1 = new HumanPlayer("Player1", 1000);
-        AIPlayer player2 = new AIPlayer("Player2", 1000);
-        List<Player> twoPlayers = List.of(player1, player2);
+        controller.startGame(players);
 
-        // Capture total chips before startGame (which posts blinds into the pot)
-        int totalChipsBefore = player1.getChips() + player2.getChips();
+        clearDealtCards(controller);
 
-        controller.startGame(twoPlayers);
+        human.getHand().addCard(new Card(Card.Suit.HEARTS, Card.Rank.ACE));
+        human.getHand().addCard(new Card(Card.Suit.SPADES, Card.Rank.ACE));
 
-        // Run through a full round to showdown
-        setupAllPlayersCheckOrCallForController(controller);
-        controller.dealFlop();
-        controller.dealTurn();
-        controller.dealRiver();
+        ai.getHand().addCard(new Card(Card.Suit.CLUBS, Card.Rank.THREE));
+        ai.getHand().addCard(new Card(Card.Suit.DIAMONDS, Card.Rank.FOUR));
 
+        controller.getState().getBoard().addCard(new Card(Card.Suit.DIAMONDS, Card.Rank.NINE));
+        controller.getState().getBoard().addCard(new Card(Card.Suit.CLUBS, Card.Rank.SEVEN));
+        controller.getState().getBoard().addCard(new Card(Card.Suit.SPADES, Card.Rank.FIVE));
+        controller.getState().getBoard().addCard(new Card(Card.Suit.HEARTS, Card.Rank.JACK));
+        controller.getState().getBoard().addCard(new Card(Card.Suit.DIAMONDS, Card.Rank.TWO));
+
+        int totalChipsBefore = human.getChips() + ai.getChips()
+                + controller.getState().getPot();
+
+        controller.getState().setPhase(GameState.Phase.SHOWDOWN);
         controller.determineWinner();
 
-        int totalChipsAfter = player1.getChips() + player2.getChips();
+        int totalChipsAfter = human.getChips() + ai.getChips()
+                + controller.getState().getPot();
 
-        // Total chips should be conserved across a full round
-        assertEquals(totalChipsBefore, totalChipsAfter,
-            "Total chips should be conserved across a full round");
+        assertEquals(totalChipsBefore, totalChipsAfter);
     }
 }
