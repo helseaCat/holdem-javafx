@@ -39,6 +39,7 @@ public class GameTableView implements GameEventListener {
     private Button raiseBtn;
 
     private final Map<Player, VBox> playerCardAreas = new HashMap<>();
+    private final Map<Player, HBox> playerCardBoxes = new HashMap<>();
     private final Map<Player, Text> betLabels = new HashMap<>();
     private final List<Player> allPlayers;
 
@@ -101,6 +102,7 @@ public class GameTableView implements GameEventListener {
 
     private void buildPlayerAreas(BorderPane root) {
         playerCardAreas.clear();
+        playerCardBoxes.clear();
         betLabels.clear();
 
         List<Player> aiPlayers = new ArrayList<>();
@@ -121,6 +123,7 @@ public class GameTableView implements GameEventListener {
             playerBox.setStyle("-fx-padding: 10;");
 
             playerCardAreas.put(p, playerBox);
+            playerCardBoxes.put(p, cardBox);
 
             if (!(p instanceof HumanPlayer)) {
                 aiPlayers.add(p);
@@ -186,6 +189,7 @@ public class GameTableView implements GameEventListener {
     @Override
     public void onPlayerTurn(Player player, int callAmount) {
         Platform.runLater(() -> {
+            applyTurnHighlight(player);
             statusText.setText(player.getName() + "'s turn — call amount: $" + callAmount);
             setActionButtonsDisabled(false);
         });
@@ -194,11 +198,14 @@ public class GameTableView implements GameEventListener {
     @Override
     public void onPlayerActed(Player player, Player.Action action) {
         Platform.runLater(() -> {
+            removeTurnHighlight();
             statusText.setText(player.getName() + ": " + action);
             setActionButtonsDisabled(true);
             if (action == Player.Action.FOLD) {
                 removePlayerCards(player);
             }
+            updateBetDisplays();
+            updatePotDisplay(gameController.getState().getPot());
             updateChipDisplays();
         });
     }
@@ -206,7 +213,12 @@ public class GameTableView implements GameEventListener {
     @Override
     public void onPhaseChanged(GameState.Phase phase, GameState state) {
         Platform.runLater(() -> {
-            potText.setText("Pot: $" + state.getPot());
+            updatePhaseDisplay(phase);
+            updatePotDisplay(state.getPot());
+            updateBetDisplays();
+            if (phase == GameState.Phase.PRE_FLOP) {
+                updateDealerButton();
+            }
             updateBoardDisplay(state);
             updateHoleCardDisplay(phase);
             updateChipDisplays();
@@ -217,7 +229,15 @@ public class GameTableView implements GameEventListener {
     @Override
     public void onRoundComplete(GameState state) {
         Platform.runLater(() -> {
-            potText.setText("Pot: $" + state.getPot());
+            removeTurnHighlight();
+            phaseText.setText("");
+            updatePotDisplay(state.getPot());
+            for (Text betLabel : betLabels.values()) {
+                betLabel.setVisible(false);
+            }
+            if (dealerButtonText.getParent() instanceof VBox parent) {
+                parent.getChildren().remove(dealerButtonText);
+            }
             statusText.setText("Round complete");
             clearAllCardDisplays();
         });
@@ -258,11 +278,8 @@ public class GameTableView implements GameEventListener {
     }
 
     private void removePlayerCards(Player player) {
-        VBox playerBox = playerCardAreas.get(player);
-        if (playerBox == null) return;
-
-        // The card HBox is the last child of the VBox
-        HBox cardBox = (HBox) playerBox.getChildren().getLast();
+        HBox cardBox = playerCardBoxes.get(player);
+        if (cardBox == null) return;
         cardBox.getChildren().clear();
     }
 
@@ -315,7 +332,7 @@ public class GameTableView implements GameEventListener {
         removeTurnHighlight();
         VBox playerBox = playerCardAreas.get(player);
         if (playerBox != null) {
-            playerBox.setStyle("-fx-border-color: gold; -fx-border-width: 2;");
+            playerBox.setStyle("-fx-padding: 10; -fx-border-color: gold; -fx-border-width: 2;");
             highlightedPlayer = player;
         }
     }
@@ -324,7 +341,7 @@ public class GameTableView implements GameEventListener {
         if (highlightedPlayer != null) {
             VBox box = playerCardAreas.get(highlightedPlayer);
             if (box != null) {
-                box.setStyle("");
+                box.setStyle("-fx-padding: 10;");
             }
             highlightedPlayer = null;
         }
@@ -346,9 +363,8 @@ public class GameTableView implements GameEventListener {
     }
 
     private void clearAllCardDisplays() {
-        for (VBox playerBox : playerCardAreas.values()) {
-            HBox cardBox = (HBox) playerBox.getChildren().getLast();
-            cardBox.getChildren().clear();
+        for (Map.Entry<Player, HBox> entry : playerCardBoxes.entrySet()) {
+            entry.getValue().getChildren().clear();
         }
         boardArea.getChildren().clear();
     }
@@ -356,11 +372,9 @@ public class GameTableView implements GameEventListener {
     private void updateHoleCardDisplay(GameState.Phase phase) {
         if (phase == GameState.Phase.PRE_FLOP) {
             for (Player player : allPlayers) {
-                VBox playerBox = playerCardAreas.get(player);
-                if (playerBox == null) continue;
+                HBox cardBox = playerCardBoxes.get(player);
+                if (cardBox == null) continue;
 
-                // The card HBox is the last child of the VBox
-                HBox cardBox = (HBox) playerBox.getChildren().getLast();
                 cardBox.getChildren().clear();
 
                 List<Card> holeCards = player.getHand().getCards();
@@ -378,10 +392,9 @@ public class GameTableView implements GameEventListener {
             for (Player player : allPlayers) {
                 if (!(player instanceof AIPlayer)) continue;
 
-                VBox playerBox = playerCardAreas.get(player);
-                if (playerBox == null) continue;
+                HBox cardBox = playerCardBoxes.get(player);
+                if (cardBox == null) continue;
 
-                HBox cardBox = (HBox) playerBox.getChildren().getLast();
                 List<Card> holeCards = player.getHand().getCards();
                 if (holeCards.isEmpty()) continue;
 
