@@ -476,12 +476,54 @@ public class GameController {
             }
         }
 
-        if (players.size() == 1) {
-            gameOver = true;
-            gameWinner = players.get(0);
+        return eliminatedIndices;
+    }
+
+    boolean isHumanEliminated() {
+        for (Player p : players) {
+            if (p instanceof HumanPlayer) {
+                return p.getChips() == 0;
+            }
+        }
+        // Human not in the list — already removed
+        return true;
+    }
+
+    /**
+     * Adjusts the dealer button index after players have been removed from the list.
+     * The eliminatedIndices are the original indices (before removal).
+     * Must be called after players have already been removed from the list.
+     */
+    void adjustDealerIndexAfterElimination(List<Integer> eliminatedIndices) {
+        if (eliminatedIndices.isEmpty() || players.isEmpty()) {
+            return;
         }
 
-        return eliminatedIndices;
+        int beforeCount = 0;
+        boolean dealerEliminated = false;
+
+        for (int idx : eliminatedIndices) {
+            if (idx < dealerButtonIndex) {
+                beforeCount++;
+            } else if (idx == dealerButtonIndex) {
+                dealerEliminated = true;
+            }
+        }
+
+        if (dealerEliminated) {
+            // The player who sat after the dealer is now at (dealerButtonIndex - beforeCount)
+            // in the shortened list. Set index to one less so nextRound()'s +1 lands on them.
+            dealerButtonIndex = (dealerButtonIndex - beforeCount) - 1;
+        } else {
+            // Shift down to keep pointing at the same player in the shortened list.
+            dealerButtonIndex -= beforeCount;
+        }
+
+        // Safety clamp: -1 is valid (nextRound handles it via (-1+1) % size = 0)
+        dealerButtonIndex = Math.max(-1, dealerButtonIndex);
+        if (players.size() > 0) {
+            dealerButtonIndex = Math.min(dealerButtonIndex, players.size() - 1);
+        }
     }
 
     public Player determineWinner() {
@@ -491,7 +533,6 @@ public class GameController {
 
         List<Player> winners = findWinners();
         awardPot(winners);
-        eliminateBrokePlayers();
 
         return winners.get(0);
     }
@@ -537,13 +578,43 @@ public class GameController {
 
     void runGameLoop() {
         try {
-            runSingleHand();
-            notifyRoundComplete();
+            while (!gameOver) {
+                runSingleHand();
+
+                List<Integer> eliminatedIndices = eliminateBrokePlayers();
+
+                if (isHumanEliminated() || players.size() == 1) {
+                    gameOver = true;
+                    gameWinner = players.size() == 1 ? players.get(0) : null;
+                    notifyGameOver(gameWinner);
+                    break;
+                }
+
+                notifyRoundComplete();
+
+                nextRoundFuture = new CompletableFuture<>();
+                nextRoundFuture.get(); // block until UI signals next round
+
+                adjustDealerIndexAfterElimination(eliminatedIndices);
+                nextRound();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            notifyError(new GameLoopInterruptedException(e));
+        } catch (CancellationException e) {
+            // Future cancelled during shutdown — exit silently
+        } catch (ExecutionException e) {
+            notifyError(e);
         } catch (GameLoopInterruptedException e) {
-            // Engine thread interrupted — terminate gracefully
             notifyError(e);
         } catch (Exception e) {
             notifyError(e);
+        }
+    }
+
+    private void notifyGameOver(Player winner) {
+        if (listener != null) {
+            listener.onGameOver(winner);
         }
     }
 
