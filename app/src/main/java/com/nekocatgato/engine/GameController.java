@@ -456,13 +456,32 @@ public class GameController {
         state.resetPot();
     }
 
-    /** Package-private for testability. */
-    void eliminateBrokePlayers() {
+    /** Package-private for testability. Returns indices of eliminated players (before removal). */
+    List<Integer> eliminateBrokePlayers() {
+        List<Integer> eliminatedIndices = new ArrayList<>();
+        List<Player> eliminatedPlayers = new ArrayList<>();
+
+        for (int i = 0; i < players.size(); i++) {
+            if (players.get(i).getChips() == 0) {
+                eliminatedIndices.add(i);
+                eliminatedPlayers.add(players.get(i));
+            }
+        }
+
         players.removeIf(p -> p.getChips() == 0);
+
+        for (Player eliminated : eliminatedPlayers) {
+            if (listener != null) {
+                listener.onPlayerEliminated(eliminated);
+            }
+        }
+
         if (players.size() == 1) {
             gameOver = true;
             gameWinner = players.get(0);
         }
+
+        return eliminatedIndices;
     }
 
     public Player determineWinner() {
@@ -477,44 +496,48 @@ public class GameController {
         return winners.get(0);
     }
 
+    void runSingleHand() {
+        // Pre-flop betting (blinds already posted, hole cards dealt by nextRound/startGame)
+        notifyPhaseChanged(GameState.Phase.PRE_FLOP);
+        int firstToAct = (dealerButtonIndex + 3) % activePlayers.size();
+        runBettingRoundAsync(firstToAct);
+        if (activePlayers.size() <= 1) { return; }
+
+        // Flop
+        for (int i = 0; i < 3; i++) {
+            state.getBoard().addCard(state.getDeck().deal());
+        }
+        resetPlayerBets();
+        state.setPhase(GameState.Phase.FLOP);
+        notifyPhaseChanged(GameState.Phase.FLOP);
+        runBettingRoundAsync((dealerButtonIndex + 1) % activePlayers.size());
+        if (activePlayers.size() <= 1) { return; }
+
+        // Turn
+        state.getBoard().addCard(state.getDeck().deal());
+        resetPlayerBets();
+        state.setPhase(GameState.Phase.TURN);
+        notifyPhaseChanged(GameState.Phase.TURN);
+        runBettingRoundAsync((dealerButtonIndex + 1) % activePlayers.size());
+        if (activePlayers.size() <= 1) { return; }
+
+        // River
+        state.getBoard().addCard(state.getDeck().deal());
+        resetPlayerBets();
+        state.setPhase(GameState.Phase.RIVER);
+        notifyPhaseChanged(GameState.Phase.RIVER);
+        runBettingRoundAsync((dealerButtonIndex + 1) % activePlayers.size());
+        if (activePlayers.size() <= 1) { return; }
+
+        // Showdown
+        state.setPhase(GameState.Phase.SHOWDOWN);
+        notifyPhaseChanged(GameState.Phase.SHOWDOWN);
+        determineWinner();
+    }
+
     void runGameLoop() {
         try {
-            // Pre-flop betting (blinds already posted, hole cards dealt by nextRound/startGame)
-            notifyPhaseChanged(GameState.Phase.PRE_FLOP);
-            int firstToAct = (dealerButtonIndex + 3) % activePlayers.size();
-            runBettingRoundAsync(firstToAct);
-            if (activePlayers.size() <= 1) { notifyRoundComplete(); return; }
-
-            // Flop
-            for (int i = 0; i < 3; i++) {
-                state.getBoard().addCard(state.getDeck().deal());
-            }
-            resetPlayerBets();
-            state.setPhase(GameState.Phase.FLOP);
-            notifyPhaseChanged(GameState.Phase.FLOP);
-            runBettingRoundAsync((dealerButtonIndex + 1) % activePlayers.size());
-            if (activePlayers.size() <= 1) { notifyRoundComplete(); return; }
-
-            // Turn
-            state.getBoard().addCard(state.getDeck().deal());
-            resetPlayerBets();
-            state.setPhase(GameState.Phase.TURN);
-            notifyPhaseChanged(GameState.Phase.TURN);
-            runBettingRoundAsync((dealerButtonIndex + 1) % activePlayers.size());
-            if (activePlayers.size() <= 1) { notifyRoundComplete(); return; }
-
-            // River
-            state.getBoard().addCard(state.getDeck().deal());
-            resetPlayerBets();
-            state.setPhase(GameState.Phase.RIVER);
-            notifyPhaseChanged(GameState.Phase.RIVER);
-            runBettingRoundAsync((dealerButtonIndex + 1) % activePlayers.size());
-            if (activePlayers.size() <= 1) { notifyRoundComplete(); return; }
-
-            // Showdown
-            state.setPhase(GameState.Phase.SHOWDOWN);
-            notifyPhaseChanged(GameState.Phase.SHOWDOWN);
-            determineWinner();
+            runSingleHand();
             notifyRoundComplete();
         } catch (GameLoopInterruptedException e) {
             // Engine thread interrupted — terminate gracefully
