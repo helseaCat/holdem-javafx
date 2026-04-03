@@ -2,6 +2,7 @@ package com.nekocatgato.engine;
 
 import com.nekocatgato.model.Card;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -12,6 +13,23 @@ public class HandEvaluator {
         HIGH_CARD, ONE_PAIR, TWO_PAIR, THREE_OF_A_KIND,
         STRAIGHT, FLUSH, FULL_HOUSE, FOUR_OF_A_KIND,
         STRAIGHT_FLUSH, ROYAL_FLUSH
+    }
+
+    /**
+     * Pairs a HandRank with an ordered list of tiebreaker values for kicker-aware comparison.
+     * Comparison: rank ordinal first, then lexicographic on tiebreakers.
+     */
+    public static record HandResult(HandRank rank, List<Integer> tiebreakers) implements Comparable<HandResult> {
+        @Override
+        public int compareTo(HandResult other) {
+            int rankCmp = Integer.compare(this.rank.ordinal(), other.rank.ordinal());
+            if (rankCmp != 0) return rankCmp;
+            for (int i = 0; i < Math.min(this.tiebreakers.size(), other.tiebreakers.size()); i++) {
+                int cmp = Integer.compare(this.tiebreakers.get(i), other.tiebreakers.get(i));
+                if (cmp != 0) return cmp;
+            }
+            return Integer.compare(this.tiebreakers.size(), other.tiebreakers.size());
+        }
     }
 
     /**
@@ -42,11 +60,116 @@ public class HandEvaluator {
     }
 
     /**
+     * Evaluates the best 5-card hand from the given cards considering both rank AND kickers.
+     * Iterates all C(n,5) combinations, evaluates each with evaluateFiveCard(),
+     * and returns the maximum HandResult using HandResult.compareTo().
+     */
+    public HandResult evaluateBest(List<Card> cards) {
+        if (cards == null) {
+            throw new IllegalArgumentException("cards must not be null");
+        }
+        if (cards.size() < 5) {
+            throw new IllegalArgumentException("at least 5 cards required, got " + cards.size());
+        }
+        for (Card card : cards) {
+            if (card == null) {
+                throw new IllegalArgumentException("cards must not contain null elements");
+            }
+        }
+
+        HandResult best = null;
+        for (List<Card> five : combinations(cards, 5)) {
+            HandResult result = evaluateFiveCard(five);
+            if (best == null || result.compareTo(best) > 0) {
+                best = result;
+            }
+        }
+        return best;
+    }
+
+    /**
      * Compares two hands. Returns positive if hand1 wins, negative if hand2 wins, 0 for tie.
      * TODO: fix - only compares HandRank, doesn't handle kickers/tie-breakers
      */
     public int compare(List<Card> hand1, List<Card> hand2) {
-        return evaluate(hand1).ordinal() - evaluate(hand2).ordinal();
+        return evaluateBest(hand1).compareTo(evaluateBest(hand2));
+    }
+
+    /**
+     * Evaluates a 5-card hand and returns a HandResult with rank and tiebreaker list.
+     * Delegates to classifyFiveCard() for the HandRank, then builds tiebreakers per rank type.
+     */
+    public HandResult evaluateFiveCard(List<Card> five) {
+        HandRank rank = classifyFiveCard(five);
+        Map<Integer, Long> freq = rankFrequencies(five);
+        List<Integer> sortedDesc = five.stream()
+                .map(c -> c.getRank().ordinal())
+                .sorted(Comparator.reverseOrder())
+                .collect(Collectors.toList());
+
+        List<Integer> tiebreakers = switch (rank) {
+            case ROYAL_FLUSH -> List.of();
+            case STRAIGHT_FLUSH, STRAIGHT -> {
+                List<Integer> sorted = five.stream()
+                        .map(c -> c.getRank().ordinal())
+                        .sorted()
+                        .collect(Collectors.toList());
+                // Wheel (A-2-3-4-5): high card is FIVE (ordinal 3)
+                if (sorted.equals(List.of(0, 1, 2, 3, 12))) {
+                    yield List.of(3);
+                }
+                yield List.of(sorted.get(4));
+            }
+            case FOUR_OF_A_KIND -> {
+                int quadRank = rankWithCount(freq, 4);
+                int kicker = rankWithCount(freq, 1);
+                yield List.of(quadRank, kicker);
+            }
+            case FULL_HOUSE -> {
+                int tripRank = rankWithCount(freq, 3);
+                int pairRank = rankWithCount(freq, 2);
+                yield List.of(tripRank, pairRank);
+            }
+            case FLUSH, HIGH_CARD -> sortedDesc;
+            case THREE_OF_A_KIND -> {
+                int tripRank = rankWithCount(freq, 3);
+                List<Integer> kickers = freq.entrySet().stream()
+                        .filter(e -> e.getValue() == 1)
+                        .map(Map.Entry::getKey)
+                        .sorted(Comparator.reverseOrder())
+                        .collect(Collectors.toList());
+                yield List.of(tripRank, kickers.get(0), kickers.get(1));
+            }
+            case TWO_PAIR -> {
+                List<Integer> pairRanks = freq.entrySet().stream()
+                        .filter(e -> e.getValue() == 2)
+                        .map(Map.Entry::getKey)
+                        .sorted(Comparator.reverseOrder())
+                        .collect(Collectors.toList());
+                int kicker = rankWithCount(freq, 1);
+                yield List.of(pairRanks.get(0), pairRanks.get(1), kicker);
+            }
+            case ONE_PAIR -> {
+                int pairRank = rankWithCount(freq, 2);
+                List<Integer> kickers = freq.entrySet().stream()
+                        .filter(e -> e.getValue() == 1)
+                        .map(Map.Entry::getKey)
+                        .sorted(Comparator.reverseOrder())
+                        .collect(Collectors.toList());
+                yield List.of(pairRank, kickers.get(0), kickers.get(1), kickers.get(2));
+            }
+        };
+
+        return new HandResult(rank, tiebreakers);
+    }
+
+    /** Returns the rank ordinal that appears exactly {@code count} times in the frequency map. */
+    private int rankWithCount(Map<Integer, Long> freq, long count) {
+        return freq.entrySet().stream()
+                .filter(e -> e.getValue() == count)
+                .map(Map.Entry::getKey)
+                .findFirst()
+                .orElseThrow();
     }
 
     /** Generates all C(n,k) subsets of the given list. */

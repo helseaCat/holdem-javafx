@@ -402,20 +402,20 @@ public class GameController {
 
     private List<Player> findWinners() {
         List<Player> winners = new ArrayList<>();
-        HandEvaluator.HandRank bestRank = null;
+        HandEvaluator.HandResult bestResult = null;
 
         for (Player p : activePlayers) {
             List<Card> sevenCards = new ArrayList<>();
             sevenCards.addAll(p.getHand().getCards());
             sevenCards.addAll(state.getBoard().getCards());
 
-            HandEvaluator.HandRank rank = evaluator.evaluate(sevenCards);
+            HandEvaluator.HandResult result = evaluator.evaluateBest(sevenCards);
 
-            if (bestRank == null || rank.ordinal() > bestRank.ordinal()) {
-                bestRank = rank;
+            if (bestResult == null || result.compareTo(bestResult) > 0) {
+                bestResult = result;
                 winners.clear();
                 winners.add(p);
-            } else if (rank.ordinal() == bestRank.ordinal()) {
+            } else if (result.compareTo(bestResult) == 0) {
                 winners.add(p);
             }
         }

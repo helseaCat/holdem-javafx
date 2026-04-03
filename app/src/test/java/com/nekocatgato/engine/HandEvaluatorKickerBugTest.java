@@ -157,58 +157,60 @@ class HandEvaluatorKickerBugTest {
         };
     }
 
-    /** Two ONE_PAIR hands with different pair ranks. */
+    /** Two ONE_PAIR hands with different pair ranks. Uses gapped fillers to avoid straights. */
     private Arbitrary<List<List<Card>>> pairVsPairDifferentRank() {
-        Rank[] ranks = Rank.values();
-        return Arbitraries.integers().between(0, ranks.length - 2).flatMap(i ->
-            Arbitraries.integers().between(i + 1, ranks.length - 1).map(j -> {
-                // i < j, so pair at ranks[j] is higher
-                Rank lowPair = ranks[i];
-                Rank highPair = ranks[j];
-                // Pick 5 distinct filler ranks that avoid both pair ranks
-                List<Rank> fillers = Arrays.stream(ranks)
-                    .filter(r -> r != lowPair && r != highPair)
-                    .limit(5)
-                    .toList();
-                List<Card> hand1 = buildPairHand(highPair, fillers.subList(0, 5));
-                List<Card> hand2 = buildPairHand(lowPair, fillers.subList(0, 5));
+        // Safe fillers: {TWO, FIVE, EIGHT, JACK, ACE} — gaps of 3, no 5 consecutive
+        Rank[] safeFillers = { Rank.TWO, Rank.FIVE, Rank.EIGHT, Rank.JACK, Rank.ACE };
+        // Pair candidates that don't collide with fillers
+        Rank[] pairCandidates = { Rank.THREE, Rank.FOUR, Rank.SIX, Rank.SEVEN, Rank.NINE, Rank.TEN, Rank.QUEEN, Rank.KING };
+
+        return Arbitraries.integers().between(0, pairCandidates.length - 2).flatMap(i ->
+            Arbitraries.integers().between(i + 1, pairCandidates.length - 1).map(j -> {
+                Rank lowPair = pairCandidates[i];
+                Rank highPair = pairCandidates[j];
+                List<Rank> fillers = Arrays.asList(safeFillers);
+                List<Card> hand1 = buildPairHand(highPair, fillers);
+                List<Card> hand2 = buildPairHand(lowPair, fillers);
                 return List.of(hand1, hand2);
             })
         );
     }
 
-    /** Two ONE_PAIR hands with the same pair rank but different first kicker. */
+    /**
+     * Two ONE_PAIR hands with the same pair rank but different first kicker.
+     * Uses well-separated filler ranks to avoid accidentally forming straights.
+     * The differing kicker is always the highest non-pair card.
+     */
     private Arbitrary<List<List<Card>>> pairVsPairDifferentKicker() {
-        return Arbitraries.of(Rank.values()).flatMap(pairRank -> {
-            List<Rank> others = Arrays.stream(Rank.values())
-                .filter(r -> r != pairRank)
-                .toList();
-            return Arbitraries.integers().between(0, others.size() - 2).flatMap(i ->
-                Arbitraries.integers().between(i + 1, others.size() - 1).map(j -> {
-                    // Build kicker sets that differ in the highest kicker
-                    Rank lowKicker = others.get(i);
-                    Rank highKicker = others.get(j);
-                    List<Rank> remaining = others.stream()
-                        .filter(r -> r != lowKicker && r != highKicker)
-                        .limit(4)
-                        .toList();
+        // Use fixed safe filler sets that cannot form straights with any pair rank.
+        // Fillers are gapped: {TWO, FIVE, EIGHT, JACK} — no 5 consecutive possible.
+        Rank[] safeFillers = { Rank.TWO, Rank.FIVE, Rank.EIGHT, Rank.JACK };
+        // Kicker candidates that are higher than all fillers and well-separated
+        Rank[] kickerCandidates = { Rank.QUEEN, Rank.KING, Rank.ACE };
+        // Pair ranks that don't collide with fillers or kickers
+        Rank[] pairCandidates = { Rank.THREE, Rank.SIX, Rank.NINE, Rank.TEN };
+
+        return Arbitraries.of(pairCandidates).flatMap(pairRank ->
+            Arbitraries.integers().between(0, kickerCandidates.length - 2).flatMap(i ->
+                Arbitraries.integers().between(i + 1, kickerCandidates.length - 1).map(j -> {
+                    Rank lowKicker = kickerCandidates[i];
+                    Rank highKicker = kickerCandidates[j];
                     List<Card> hand1 = buildPairHandWithKickers(pairRank,
-                        highKicker, remaining.get(0), remaining.get(1), remaining.get(2), remaining.get(3));
+                        highKicker, safeFillers[0], safeFillers[1], safeFillers[2], safeFillers[3]);
                     List<Card> hand2 = buildPairHandWithKickers(pairRank,
-                        lowKicker, remaining.get(0), remaining.get(1), remaining.get(2), remaining.get(3));
+                        lowKicker, safeFillers[0], safeFillers[1], safeFillers[2], safeFillers[3]);
                     return List.of(hand1, hand2);
                 })
-            );
-        });
+            )
+        );
     }
 
     /** Two STRAIGHT hands with different high cards. */
     private Arbitrary<List<List<Card>>> straightVsStraightDifferentHigh() {
-        // Straights: high card from FIVE(3) to ACE(12), but we need non-flush
-        // Valid high cards for non-wheel: SIX(4) through ACE(12), wheel = FIVE(3)
-        return Arbitraries.integers().between(4, 12).flatMap(high1 ->
+        // Straights: high card from SIX(4) to ACE(12) for non-wheel
+        // Need high1 > high2, so high1 starts at 5 (minimum that allows a lower straight)
+        return Arbitraries.integers().between(5, 12).flatMap(high1 ->
             Arbitraries.integers().between(4, high1 - 1)
-                .filter(high2 -> high2 >= 4)
                 .map(high2 -> {
                     List<Card> hand1 = buildStraightHand(high1);
                     List<Card> hand2 = buildStraightHand(high2);
