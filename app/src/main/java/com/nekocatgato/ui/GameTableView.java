@@ -244,6 +244,16 @@ public class GameTableView implements GameEventListener {
     }
 
     @Override
+    public void onPlayerEliminated(Player player) {
+        // stub — will be implemented in task 7.2
+    }
+
+    @Override
+    public void onGameOver(Player winner) {
+        // stub — will be implemented in task 7.3
+    }
+
+    @Override
     public void onError(Exception e) {
         Platform.runLater(() -> {
             Alert alert = new Alert(Alert.AlertType.ERROR);

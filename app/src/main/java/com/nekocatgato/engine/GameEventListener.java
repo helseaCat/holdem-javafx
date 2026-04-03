@@ -13,5 +13,7 @@ public interface GameEventListener {
     void onPlayerTurn(Player player, int callAmount);
     void onPlayerActed(Player player, Player.Action action);
     void onRoundComplete(GameState state);
+    void onPlayerEliminated(Player player);
+    void onGameOver(Player winner);
     void onError(Exception e);
 }

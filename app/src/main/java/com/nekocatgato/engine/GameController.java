@@ -21,6 +21,9 @@ public class GameController {
     private boolean gameOver;
     private Player gameWinner;
     private GameEventListener listener;
+    private volatile CompletableFuture<Void> nextRoundFuture;
+    private List<Player> allOriginalPlayers;
+    private int initialChipCount;
     private final ExecutorService engineExecutor = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "EngineThread");
         t.setDaemon(true);
@@ -47,7 +50,11 @@ public class GameController {
             }
         }
         this.players = new ArrayList<>(players);
+        this.allOriginalPlayers = new ArrayList<>(players);
+        this.initialChipCount = players.get(0).getChips();
         this.dealerButtonIndex = -1;
+        this.gameOver = false;
+        this.gameWinner = null;
         nextRound();
     }
 
@@ -55,6 +62,13 @@ public class GameController {
         startGame(players);
         validateSingleHumanPlayer(this.players);
         engineExecutor.submit(this::runGameLoop);
+    }
+
+    public void signalNextRound() {
+        CompletableFuture<Void> f = nextRoundFuture;
+        if (f != null && !f.isDone()) {
+            f.complete(null);
+        }
     }
 
     private void validateSingleHumanPlayer(List<Player> players) {
@@ -534,4 +548,7 @@ public class GameController {
     public int getDealerButtonIndex() { return dealerButtonIndex; }
     public boolean isGameOver() { return gameOver; }
     public Player getGameWinner() { return gameWinner; }
+    public List<Player> getAllOriginalPlayers() { return allOriginalPlayers; }
+    public int getInitialChipCount() { return initialChipCount; }
+    CompletableFuture<Void> getNextRoundFuture() { return nextRoundFuture; }
 }

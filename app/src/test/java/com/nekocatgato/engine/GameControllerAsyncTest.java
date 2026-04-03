@@ -69,6 +69,16 @@ class GameControllerAsyncTest {
             lastError = e;
             eventLog.add("error:" + e.getClass().getSimpleName());
         }
+
+        @Override
+        public void onPlayerEliminated(Player player) {
+            eventLog.add("eliminated:" + player.getName());
+        }
+
+        @Override
+        public void onGameOver(Player winner) {
+            eventLog.add("gameOver:" + (winner != null ? winner.getName() : "null"));
+        }
     }
 
     static class AutoHumanPlayer extends HumanPlayer {

@@ -378,6 +378,12 @@ class GameControllerAsyncPropertyTest {
 
         @Override
         public void onError(Exception e) {}
+
+        @Override
+        public void onPlayerEliminated(Player player) {}
+
+        @Override
+        public void onGameOver(Player winner) {}
     }
 
     // ── Helper: A HumanPlayer that auto-submits an action from a queue ──
