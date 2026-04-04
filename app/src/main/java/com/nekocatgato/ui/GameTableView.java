@@ -98,8 +98,8 @@ public class GameTableView implements GameEventListener {
         potText = new Text("Pot: $0");
         phaseText = new Text("");
         statusText = new Text("");
-        dealerButtonText = new Text("D");
-        dealerButtonText.setStyle("-fx-font-weight: bold; -fx-fill: white; -fx-background-color: black;");
+        dealerButtonText = new Text("Ⓓ");
+        dealerButtonText.setStyle("-fx-font-weight: bold; -fx-font-size: 16px; -fx-fill: #d4af37;");
 
         buildPlayerAreas(root);
 
