@@ -134,8 +134,14 @@ class RoundGatingPropertyTest {
         assert roundDone : "onRoundComplete should have fired within 5 seconds";
         assert listener.roundCompleted.get() : "roundCompleted flag should be true";
 
-        // Give the engine thread a moment to create the future and block on it
-        Thread.sleep(200);
+        // Wait for the engine thread to create the future and block on it
+        // Poll instead of sleeping to avoid non-deterministic timing
+        CompletableFuture<Void> future = null;
+        for (int i = 0; i < 50; i++) {
+            future = gc.getNextRoundFuture();
+            if (future != null && !future.isDone()) break;
+            Thread.sleep(10);
+        }
 
         // If game ended (e.g., someone got eliminated), skip the gating assertion
         if (listener.gameOverFired.get()) {
@@ -143,8 +149,10 @@ class RoundGatingPropertyTest {
         }
 
         // CORE ASSERTION: nextRoundFuture must exist and NOT be done
-        CompletableFuture<Void> future = gc.getNextRoundFuture();
-        assert future != null : "nextRoundFuture should be non-null after onRoundComplete";
+        if (future == null) {
+            assert false : "nextRoundFuture should be non-null after onRoundComplete";
+            return;
+        }
         assert !future.isDone() : "nextRoundFuture should NOT be done — engine must be blocked";
 
         // The phase after the hand should be SHOWDOWN (or whatever the last phase was),
@@ -156,14 +164,11 @@ class RoundGatingPropertyTest {
         // Now signal the next round
         gc.signalNextRound();
 
-        // Give the engine thread time to process
-        Thread.sleep(500);
+        // Wait for the future to complete (deterministic — no sleep)
+        future.get(5, TimeUnit.SECONDS);
 
         // After signaling, the future should be done
         assert future.isDone() : "nextRoundFuture should be done after signalNextRound()";
-
-        // After signaling, the engine should have unblocked and proceeded
-        assert future.isDone() : "Engine should have unblocked after signal";
 
         // Clean up: signal again in case the engine is waiting on a second round
         gc.signalNextRound();

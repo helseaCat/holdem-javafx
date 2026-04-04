@@ -10,7 +10,6 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Property 3: Round reset preserves chip counts
@@ -151,8 +150,12 @@ class RoundResetPropertyTest {
         boolean roundDone = listener.firstRoundLatch.await(5, TimeUnit.SECONDS);
         assert roundDone : "onRoundComplete should have fired within 5 seconds";
 
-        // Give engine thread time to create the future and block
-        Thread.sleep(200);
+        // Wait for engine to create the future (poll instead of sleep)
+        for (int i = 0; i < 50; i++) {
+            CompletableFuture<Void> f = gc.getNextRoundFuture();
+            if (f != null && !f.isDone()) break;
+            Thread.sleep(10);
+        }
 
         // If game ended (someone eliminated), skip — not a valid round transition
         if (listener.gameOverFired.get()) {

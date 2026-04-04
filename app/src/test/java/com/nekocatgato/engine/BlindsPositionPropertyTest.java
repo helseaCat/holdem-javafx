@@ -204,10 +204,14 @@ class BlindsPositionPropertyTest {
                 }
                 assert roundDone : "Round " + round + " should complete within 10 seconds";
 
-                Thread.sleep(100); // let engine create the future
+                // Wait for engine to create the future (poll instead of sleep)
+                for (int i = 0; i < 50; i++) {
+                    CompletableFuture<Void> f = gc.getNextRoundFuture();
+                    if (f != null && !f.isDone()) break;
+                    Thread.sleep(10);
+                }
                 listener.resetLatches();
                 gc.signalNextRound();
-                Thread.sleep(200); // let engine process next round
             }
         }
 

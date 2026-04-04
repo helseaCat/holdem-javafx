@@ -136,8 +136,12 @@ class DealerRotationPropertyTest {
 
             assert done : "Round " + round + " should complete within 10 seconds";
 
-            // Give engine thread a moment to create the future and block
-            Thread.sleep(100);
+            // Wait for engine to create the future (poll instead of sleep)
+            for (int i = 0; i < 50; i++) {
+                CompletableFuture<Void> f = gc.getNextRoundFuture();
+                if (f != null && !f.isDone()) break;
+                Thread.sleep(10);
+            }
 
             // After round N completes, the dealer index should still be from this round.
             // startGame sets dealerButtonIndex = -1, then nextRound() does (+1) % P = 0 for round 1.
@@ -154,9 +158,6 @@ class DealerRotationPropertyTest {
             if (round < totalRounds) {
                 listener.resetLatch();
                 gc.signalNextRound();
-
-                // Wait briefly for nextRound() to execute and advance the dealer
-                Thread.sleep(200);
             }
         }
 

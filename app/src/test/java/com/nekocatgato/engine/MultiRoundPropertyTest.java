@@ -98,12 +98,17 @@ class MultiRoundPropertyTest {
 
         @Override
         public void onRoundComplete(GameState state) {
-            // Auto-signal next round after a brief delay to let the future be created.
+            // Auto-signal next round after the future is created.
             GameController controller = gc;
             if (controller != null) {
                 new Thread(() -> {
                     try {
-                        Thread.sleep(100);
+                        // Poll for the future instead of fixed sleep
+                        for (int i = 0; i < 50; i++) {
+                            java.util.concurrent.CompletableFuture<Void> f = controller.getNextRoundFuture();
+                            if (f != null && !f.isDone()) break;
+                            Thread.sleep(10);
+                        }
                         controller.signalNextRound();
                     } catch (InterruptedException ignored) {}
                 }).start();
@@ -618,8 +623,11 @@ class MultiRoundPropertyTest {
         gc.setGameEventListener(newListener);
         gc.resetAndRestart();
 
-        // Give the engine a moment to process
-        Thread.sleep(300);
+        // Wait for the engine to start the new game (poll for future creation)
+        for (int i = 0; i < 100; i++) {
+            if (gc.getPlayers().size() == originalPlayerCount && !gc.isGameOver()) break;
+            Thread.sleep(10);
+        }
 
         // (a) All original players restored
         assert gc.getPlayers().size() == originalPlayerCount :
