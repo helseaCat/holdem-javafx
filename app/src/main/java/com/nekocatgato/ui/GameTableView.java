@@ -13,6 +13,8 @@ import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.TextField;
+import javafx.scene.control.TextFormatter;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.StackPane;
@@ -39,6 +41,8 @@ public class GameTableView implements GameEventListener {
     private Button checkBtn;
     private Button callBtn;
     private Button raiseBtn;
+    private TextField raiseInput;
+    private Button allInBtn;
     private Button nextRoundBtn;
     private HBox actionButtonsBox;
 
@@ -82,12 +86,22 @@ public class GameTableView implements GameEventListener {
         checkBtn = new Button("Check");
         callBtn = new Button("Call");
         raiseBtn = new Button("Raise");
-        setActionButtonsDisabled(true);
 
         foldBtn.setOnAction(e -> submitPlayerAction(Player.Action.FOLD, 0));
         checkBtn.setOnAction(e -> submitPlayerAction(Player.Action.CHECK, 0));
         callBtn.setOnAction(e -> submitPlayerAction(Player.Action.CALL, 0));
-        raiseBtn.setOnAction(e -> submitPlayerAction(Player.Action.RAISE, 0));
+        raiseBtn.setOnAction(e -> submitPlayerAction(Player.Action.RAISE, 0)); // raiseAmount param ignored for RAISE; read from raiseInput
+
+        raiseInput = new TextField(String.valueOf(GameController.BIG_BLIND));
+        raiseInput.setTextFormatter(new TextFormatter<>(change ->
+                change.getControlNewText().matches("\\d*") ? change : null));
+
+        allInBtn = new Button("All In");
+        setActionButtonsDisabled(true);
+        allInBtn.setOnAction(e -> {
+            raiseInput.setText(String.valueOf(humanPlayer.getChips()));
+            submitPlayerAction(Player.Action.RAISE, humanPlayer.getChips());
+        });
 
         nextRoundBtn = new Button("Next Round");
         nextRoundBtn.setVisible(false);
@@ -146,7 +160,7 @@ public class GameTableView implements GameEventListener {
         // Bottom: human player's card area + action buttons
         if (humanPlayer != null) {
             VBox humanBox = playerCardAreas.get(humanPlayer);
-            actionButtonsBox = new HBox(10, foldBtn, checkBtn, callBtn, raiseBtn);
+            actionButtonsBox = new HBox(10, foldBtn, checkBtn, callBtn, raiseBtn, raiseInput, allInBtn);
             actionButtonsBox.setAlignment(Pos.CENTER);
             actionButtonsBox.setStyle("-fx-padding: 10;");
 
@@ -209,6 +223,7 @@ public class GameTableView implements GameEventListener {
             applyTurnHighlight(player);
             statusText.setText(player.getName() + "'s turn — call amount: $" + callAmount);
             setActionButtonsDisabled(false);
+            updateRaiseInputState(humanPlayer.getChips());
         });
     }
 
@@ -353,12 +368,73 @@ public class GameTableView implements GameEventListener {
         });
     }
 
+    // ---- Validation & State Helpers ----
+
+    /**
+     * Validates and clamps a raise amount string.
+     * Returns the validated int in [BIG_BLIND, chips], or -1 if invalid.
+     * Package-private and static for direct unit testing without JavaFX.
+     */
+    static int validateRaiseAmount(String text, int chips) {
+        if (text == null || text.isEmpty()) {
+            return -1;
+        }
+        int amount;
+        try {
+            amount = Integer.parseInt(text);
+        } catch (NumberFormatException e) {
+            return -1;
+        }
+        if (amount < GameController.BIG_BLIND) {
+            return -1;
+        }
+        if (amount > chips) {
+            return chips;
+        }
+        return amount;
+    }
+
+    /**
+     * Updates the raise input, raise button, and all-in button state
+     * based on the player's current chip count.
+     * Package-private for testability.
+     */
+    void updateRaiseInputState(int playerChips) {
+        if (playerChips < GameController.BIG_BLIND) {
+            raiseBtn.setDisable(true);
+            allInBtn.setDisable(true);
+            raiseInput.setDisable(true);
+        } else if (playerChips == GameController.BIG_BLIND) {
+            raiseBtn.setDisable(false);
+            allInBtn.setDisable(false);
+            raiseInput.setDisable(false);
+            raiseInput.setEditable(false);
+            raiseInput.setText(String.valueOf(GameController.BIG_BLIND));
+        } else {
+            raiseBtn.setDisable(false);
+            allInBtn.setDisable(false);
+            raiseInput.setDisable(false);
+            raiseInput.setEditable(true);
+            raiseInput.setText(String.valueOf(GameController.BIG_BLIND));
+        }
+    }
+
     // ---- Helpers ----
 
     private void submitPlayerAction(Player.Action action, int raiseAmount) {
         if (humanPlayer != null) {
-            setActionButtonsDisabled(true);
-            humanPlayer.submitAction(action, raiseAmount);
+            if (action == Player.Action.RAISE) {
+                int validated = validateRaiseAmount(raiseInput.getText(), humanPlayer.getChips());
+                if (validated == -1) {
+                    raiseInput.requestFocus();
+                    return;
+                }
+                setActionButtonsDisabled(true);
+                humanPlayer.submitAction(action, validated);
+            } else {
+                setActionButtonsDisabled(true);
+                humanPlayer.submitAction(action, raiseAmount);
+            }
         }
     }
 
@@ -367,6 +443,8 @@ public class GameTableView implements GameEventListener {
         checkBtn.setDisable(disabled);
         callBtn.setDisable(disabled);
         raiseBtn.setDisable(disabled);
+        raiseInput.setDisable(disabled);
+        allInBtn.setDisable(disabled);
     }
 
     private void updateBoardDisplay(GameState state) {
