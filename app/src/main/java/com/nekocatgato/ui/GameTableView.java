@@ -15,7 +15,9 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.scene.text.Font;
 import javafx.scene.text.Text;
 import javafx.stage.Stage;
 
@@ -37,12 +39,17 @@ public class GameTableView implements GameEventListener {
     private Button checkBtn;
     private Button callBtn;
     private Button raiseBtn;
+    private Button nextRoundBtn;
+    private HBox actionButtonsBox;
 
     private final Map<Player, VBox> playerCardAreas = new HashMap<>();
     private final Map<Player, HBox> playerCardBoxes = new HashMap<>();
     private final Map<Player, Text> betLabels = new HashMap<>();
     private final List<Player> allPlayers;
 
+    private BorderPane root;
+    private StackPane rootStack;
+    private StackPane gameOverOverlay;
     private Text phaseText;
     private Text dealerButtonText;
     private Player highlightedPlayer;
@@ -62,7 +69,7 @@ public class GameTableView implements GameEventListener {
     }
 
     public void show() {
-        BorderPane root = new BorderPane();
+        root = new BorderPane();
 
         // Community cards area
         boardArea = new HBox(10);
@@ -82,6 +89,11 @@ public class GameTableView implements GameEventListener {
         callBtn.setOnAction(e -> submitPlayerAction(Player.Action.CALL, 0));
         raiseBtn.setOnAction(e -> submitPlayerAction(Player.Action.RAISE, 0));
 
+        nextRoundBtn = new Button("Next Round");
+        nextRoundBtn.setVisible(false);
+        nextRoundBtn.setManaged(false);
+        nextRoundBtn.setOnAction(e -> gameController.signalNextRound());
+
         // Pot, phase, and status display
         potText = new Text("Pot: $0");
         phaseText = new Text("");
@@ -91,7 +103,8 @@ public class GameTableView implements GameEventListener {
 
         buildPlayerAreas(root);
 
-        stage.setScene(new Scene(root, 1024, 768));
+        rootStack = new StackPane(root);
+        stage.setScene(new Scene(rootStack, 1024, 768));
         stage.setTitle("Texas Hold'em — Table");
         stage.show();
 
@@ -133,11 +146,15 @@ public class GameTableView implements GameEventListener {
         // Bottom: human player's card area + action buttons
         if (humanPlayer != null) {
             VBox humanBox = playerCardAreas.get(humanPlayer);
-            HBox actions = new HBox(10, foldBtn, checkBtn, callBtn, raiseBtn);
-            actions.setAlignment(Pos.CENTER);
-            actions.setStyle("-fx-padding: 10;");
+            actionButtonsBox = new HBox(10, foldBtn, checkBtn, callBtn, raiseBtn);
+            actionButtonsBox.setAlignment(Pos.CENTER);
+            actionButtonsBox.setStyle("-fx-padding: 10;");
 
-            VBox bottomArea = new VBox(10, humanBox, actions);
+            HBox actionsArea = new HBox(10, actionButtonsBox, nextRoundBtn);
+            actionsArea.setAlignment(Pos.CENTER);
+            actionsArea.setStyle("-fx-padding: 10;");
+
+            VBox bottomArea = new VBox(10, humanBox, actionsArea);
             bottomArea.setAlignment(Pos.CENTER);
             root.setBottom(bottomArea);
         }
@@ -217,6 +234,12 @@ public class GameTableView implements GameEventListener {
             updatePotDisplay(state.getPot());
             updateBetDisplays();
             if (phase == GameState.Phase.PRE_FLOP) {
+                // Restore action buttons, hide "Next Round" button
+                nextRoundBtn.setVisible(false);
+                nextRoundBtn.setManaged(false);
+                actionButtonsBox.setVisible(true);
+                actionButtonsBox.setManaged(true);
+                setActionButtonsDisabled(true);
                 updateDealerButton();
             }
             updateBoardDisplay(state);
@@ -238,19 +261,85 @@ public class GameTableView implements GameEventListener {
             if (dealerButtonText.getParent() instanceof VBox parent) {
                 parent.getChildren().remove(dealerButtonText);
             }
-            statusText.setText("Round complete");
+
+            // Show round result: winner name and pot amount
+            String winnerName = gameController.getLastRoundWinnerName();
+            int potAmount = gameController.getLastPotAmount();
+            if (winnerName != null) {
+                statusText.setText(winnerName + " wins $" + potAmount);
+            } else {
+                statusText.setText("Round complete");
+            }
+
+            updateChipDisplays();
             clearAllCardDisplays();
+
+            // Swap action buttons for "Next Round" button
+            actionButtonsBox.setVisible(false);
+            actionButtonsBox.setManaged(false);
+            nextRoundBtn.setVisible(true);
+            nextRoundBtn.setManaged(true);
         });
     }
 
     @Override
     public void onPlayerEliminated(Player player) {
-        // stub — will be implemented in task 7.2
+        Platform.runLater(() -> {
+            VBox playerBox = playerCardAreas.get(player);
+            if (playerBox != null && playerBox.getParent() instanceof javafx.scene.layout.Pane parent) {
+                parent.getChildren().remove(playerBox);
+            }
+            playerCardAreas.remove(player);
+            playerCardBoxes.remove(player);
+            betLabels.remove(player);
+        });
     }
 
     @Override
     public void onGameOver(Player winner) {
-        // stub — will be implemented in task 7.3
+        Platform.runLater(() -> {
+            setActionButtonsDisabled(true);
+
+            // Hide next round button if visible
+            nextRoundBtn.setVisible(false);
+            nextRoundBtn.setManaged(false);
+
+            // Build overlay
+            gameOverOverlay = new StackPane();
+            gameOverOverlay.setStyle("-fx-background-color: rgba(0, 0, 0, 0.75);");
+
+            Text messageText;
+            if (winner != null) {
+                messageText = new Text(winner.getName() + " wins with $" + winner.getChips());
+            } else {
+                messageText = new Text("You have been eliminated");
+            }
+            messageText.setFont(Font.font(32));
+            messageText.setStyle("-fx-fill: white;");
+
+            VBox overlayContent = new VBox(20, messageText);
+            overlayContent.setAlignment(Pos.CENTER);
+
+            Button playAgainBtn = new Button("Play Again");
+            playAgainBtn.setStyle("-fx-font-size: 18px; -fx-padding: 10 30;");
+            playAgainBtn.setOnAction(e -> {
+                rootStack.getChildren().remove(gameOverOverlay);
+                gameOverOverlay = null;
+                allPlayers.clear();
+                allPlayers.addAll(gameController.getAllOriginalPlayers());
+                buildPlayerAreas(root);
+                setActionButtonsDisabled(true);
+                clearAllCardDisplays();
+                updatePotDisplay(0);
+                statusText.setText("");
+                phaseText.setText("");
+                gameController.resetAndRestart();
+            });
+            overlayContent.getChildren().add(playAgainBtn);
+
+            gameOverOverlay.getChildren().add(overlayContent);
+            rootStack.getChildren().add(gameOverOverlay);
+        });
     }
 
     @Override

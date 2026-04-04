@@ -24,6 +24,8 @@ public class GameController {
     private volatile CompletableFuture<Void> nextRoundFuture;
     private List<Player> allOriginalPlayers;
     private int initialChipCount;
+    private String lastRoundWinnerName;
+    private int lastPotAmount;
     private final ExecutorService engineExecutor = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "EngineThread");
         t.setDaemon(true);
@@ -61,6 +63,23 @@ public class GameController {
     public void startGameAsync(List<Player> players) {
         startGame(players);
         validateSingleHumanPlayer(this.players);
+        engineExecutor.submit(this::runGameLoop);
+    }
+
+    public void resetAndRestart() {
+        if (!gameOver) {
+            throw new IllegalStateException("Cannot reset while game is still running");
+        }
+        players = new ArrayList<>(allOriginalPlayers);
+        for (Player p : players) {
+            p.setChips(initialChipCount);
+            p.getHand().clear();
+            p.setCurrentBet(0);
+        }
+        gameOver = false;
+        gameWinner = null;
+        dealerButtonIndex = -1;
+        nextRound();
         engineExecutor.submit(this::runGameLoop);
     }
 
@@ -287,6 +306,8 @@ public class GameController {
             if (activePlayers.size() == 1) {
                 int pot = state.getPot();
                 Player winner = activePlayers.get(0);
+                lastPotAmount = pot;
+                lastRoundWinnerName = winner.getName();
                 winner.setChips(winner.getChips() + pot);
                 state.resetPot();
                 eliminateBrokePlayers();
@@ -323,6 +344,8 @@ public class GameController {
                     if (activePlayers.size() == 1) {
                         int pot = state.getPot();
                         Player winner = activePlayers.get(0);
+                        lastPotAmount = pot;
+                        lastRoundWinnerName = winner.getName();
                         winner.setChips(winner.getChips() + pot);
                         state.resetPot();
                         eliminateBrokePlayers();
@@ -443,6 +466,11 @@ public class GameController {
             state.resetPot();
             return;
         }
+
+        lastPotAmount = pot;
+        lastRoundWinnerName = winners.size() == 1
+                ? winners.get(0).getName()
+                : winners.get(0).getName() + " (split)";
 
         int share = pot / winners.size();
         int remainder = pot % winners.size();
@@ -645,4 +673,6 @@ public class GameController {
     public List<Player> getAllOriginalPlayers() { return allOriginalPlayers; }
     public int getInitialChipCount() { return initialChipCount; }
     CompletableFuture<Void> getNextRoundFuture() { return nextRoundFuture; }
+    public String getLastRoundWinnerName() { return lastRoundWinnerName; }
+    public int getLastPotAmount() { return lastPotAmount; }
 }
