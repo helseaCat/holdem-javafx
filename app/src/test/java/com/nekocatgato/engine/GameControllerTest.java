@@ -597,8 +597,9 @@ class GameControllerTest {
 
         controller.eliminateBrokePlayers();
 
-        assertTrue(controller.isGameOver());
-        assertEquals("Player", controller.getGameWinner().getName());
+        // eliminateBrokePlayers removes 0-chip players; game-over is now checked by the loop
+        assertEquals(1, controller.getPlayers().size());
+        assertEquals("Player", controller.getPlayers().get(0).getName());
     }
 
     @Test

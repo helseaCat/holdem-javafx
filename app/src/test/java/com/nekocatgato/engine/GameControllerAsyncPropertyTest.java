@@ -378,6 +378,12 @@ class GameControllerAsyncPropertyTest {
 
         @Override
         public void onError(Exception e) {}
+
+        @Override
+        public void onPlayerEliminated(Player player) {}
+
+        @Override
+        public void onGameOver(Player winner) {}
     }
 
     // ── Helper: A HumanPlayer that auto-submits an action from a queue ──
@@ -428,10 +434,10 @@ class GameControllerAsyncPropertyTest {
         RecordingListener listener = new RecordingListener();
         gc.setGameEventListener(listener);
 
-        // Use startGame + validateSingleHumanPlayer manually, then run the loop
+        // Use startGame + validateSingleHumanPlayer manually, then run a single hand
         // directly on the current thread (no executor) for deterministic testing.
         gc.startGame(List.of(human, ai));
-        gc.runGameLoop();
+        gc.runSingleHand();
 
         // Verify phase transitions
         List<GameState.Phase> expected = List.of(
@@ -450,8 +456,6 @@ class GameControllerAsyncPropertyTest {
             assert count == 1 :
                     "Phase " + phase + " should be notified exactly once, got " + count;
         }
-
-        assert listener.roundCompleted : "onRoundComplete should have been called";
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -479,8 +483,8 @@ class GameControllerAsyncPropertyTest {
 
         gc.startGame(List.of(human, ai));
 
-        // Run the game loop on the current thread
-        gc.runGameLoop();
+        // Run a single hand on the current thread
+        gc.runSingleHand();
 
         // Pot should be zero — awarded to the winner
         assert gc.getState().getPot() == 0 :

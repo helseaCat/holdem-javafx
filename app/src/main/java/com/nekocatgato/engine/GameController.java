@@ -21,6 +21,11 @@ public class GameController {
     private boolean gameOver;
     private Player gameWinner;
     private GameEventListener listener;
+    private volatile CompletableFuture<Void> nextRoundFuture;
+    private List<Player> allOriginalPlayers;
+    private int initialChipCount;
+    private String lastRoundWinnerName;
+    private int lastPotAmount;
     private final ExecutorService engineExecutor = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "EngineThread");
         t.setDaemon(true);
@@ -47,7 +52,11 @@ public class GameController {
             }
         }
         this.players = new ArrayList<>(players);
+        this.allOriginalPlayers = new ArrayList<>(players);
+        this.initialChipCount = players.get(0).getChips();
         this.dealerButtonIndex = -1;
+        this.gameOver = false;
+        this.gameWinner = null;
         nextRound();
     }
 
@@ -55,6 +64,30 @@ public class GameController {
         startGame(players);
         validateSingleHumanPlayer(this.players);
         engineExecutor.submit(this::runGameLoop);
+    }
+
+    public void resetAndRestart() {
+        if (!gameOver) {
+            throw new IllegalStateException("Cannot reset while game is still running");
+        }
+        players = new ArrayList<>(allOriginalPlayers);
+        for (Player p : players) {
+            p.setChips(initialChipCount);
+            p.getHand().clear();
+            p.setCurrentBet(0);
+        }
+        gameOver = false;
+        gameWinner = null;
+        dealerButtonIndex = -1;
+        nextRound();
+        engineExecutor.submit(this::runGameLoop);
+    }
+
+    public void signalNextRound() {
+        CompletableFuture<Void> f = nextRoundFuture;
+        if (f != null && !f.isDone()) {
+            f.complete(null);
+        }
     }
 
     private void validateSingleHumanPlayer(List<Player> players) {
@@ -273,6 +306,8 @@ public class GameController {
             if (activePlayers.size() == 1) {
                 int pot = state.getPot();
                 Player winner = activePlayers.get(0);
+                lastPotAmount = pot;
+                lastRoundWinnerName = winner.getName();
                 winner.setChips(winner.getChips() + pot);
                 state.resetPot();
                 eliminateBrokePlayers();
@@ -309,6 +344,8 @@ public class GameController {
                     if (activePlayers.size() == 1) {
                         int pot = state.getPot();
                         Player winner = activePlayers.get(0);
+                        lastPotAmount = pot;
+                        lastRoundWinnerName = winner.getName();
                         winner.setChips(winner.getChips() + pot);
                         state.resetPot();
                         eliminateBrokePlayers();
@@ -430,6 +467,11 @@ public class GameController {
             return;
         }
 
+        lastPotAmount = pot;
+        lastRoundWinnerName = winners.size() == 1
+                ? winners.get(0).getName()
+                : winners.get(0).getName() + " (split)";
+
         int share = pot / winners.size();
         int remainder = pot % winners.size();
 
@@ -442,12 +484,73 @@ public class GameController {
         state.resetPot();
     }
 
-    /** Package-private for testability. */
-    void eliminateBrokePlayers() {
+    /** Package-private for testability. Returns indices of eliminated players (before removal). */
+    List<Integer> eliminateBrokePlayers() {
+        List<Integer> eliminatedIndices = new ArrayList<>();
+        List<Player> eliminatedPlayers = new ArrayList<>();
+
+        for (int i = 0; i < players.size(); i++) {
+            if (players.get(i).getChips() == 0) {
+                eliminatedIndices.add(i);
+                eliminatedPlayers.add(players.get(i));
+            }
+        }
+
         players.removeIf(p -> p.getChips() == 0);
-        if (players.size() == 1) {
-            gameOver = true;
-            gameWinner = players.get(0);
+
+        for (Player eliminated : eliminatedPlayers) {
+            if (listener != null) {
+                listener.onPlayerEliminated(eliminated);
+            }
+        }
+
+        return eliminatedIndices;
+    }
+
+    boolean isHumanEliminated() {
+        for (Player p : players) {
+            if (p instanceof HumanPlayer) {
+                return p.getChips() == 0;
+            }
+        }
+        // Human not in the list — already removed
+        return true;
+    }
+
+    /**
+     * Adjusts the dealer button index after players have been removed from the list.
+     * The eliminatedIndices are the original indices (before removal).
+     * Must be called after players have already been removed from the list.
+     */
+    void adjustDealerIndexAfterElimination(List<Integer> eliminatedIndices) {
+        if (eliminatedIndices.isEmpty() || players.isEmpty()) {
+            return;
+        }
+
+        int beforeCount = 0;
+        boolean dealerEliminated = false;
+
+        for (int idx : eliminatedIndices) {
+            if (idx < dealerButtonIndex) {
+                beforeCount++;
+            } else if (idx == dealerButtonIndex) {
+                dealerEliminated = true;
+            }
+        }
+
+        if (dealerEliminated) {
+            // The player who sat after the dealer is now at (dealerButtonIndex - beforeCount)
+            // in the shortened list. Set index to one less so nextRound()'s +1 lands on them.
+            dealerButtonIndex = (dealerButtonIndex - beforeCount) - 1;
+        } else {
+            // Shift down to keep pointing at the same player in the shortened list.
+            dealerButtonIndex -= beforeCount;
+        }
+
+        // Safety clamp: -1 is valid (nextRound handles it via (-1+1) % size = 0)
+        dealerButtonIndex = Math.max(-1, dealerButtonIndex);
+        if (players.size() > 0) {
+            dealerButtonIndex = Math.min(dealerButtonIndex, players.size() - 1);
         }
     }
 
@@ -458,55 +561,88 @@ public class GameController {
 
         List<Player> winners = findWinners();
         awardPot(winners);
-        eliminateBrokePlayers();
 
         return winners.get(0);
     }
 
+    void runSingleHand() {
+        // Pre-flop betting (blinds already posted, hole cards dealt by nextRound/startGame)
+        notifyPhaseChanged(GameState.Phase.PRE_FLOP);
+        int firstToAct = (dealerButtonIndex + 3) % activePlayers.size();
+        runBettingRoundAsync(firstToAct);
+        if (activePlayers.size() <= 1) { return; }
+
+        // Flop
+        for (int i = 0; i < 3; i++) {
+            state.getBoard().addCard(state.getDeck().deal());
+        }
+        resetPlayerBets();
+        state.setPhase(GameState.Phase.FLOP);
+        notifyPhaseChanged(GameState.Phase.FLOP);
+        runBettingRoundAsync((dealerButtonIndex + 1) % activePlayers.size());
+        if (activePlayers.size() <= 1) { return; }
+
+        // Turn
+        state.getBoard().addCard(state.getDeck().deal());
+        resetPlayerBets();
+        state.setPhase(GameState.Phase.TURN);
+        notifyPhaseChanged(GameState.Phase.TURN);
+        runBettingRoundAsync((dealerButtonIndex + 1) % activePlayers.size());
+        if (activePlayers.size() <= 1) { return; }
+
+        // River
+        state.getBoard().addCard(state.getDeck().deal());
+        resetPlayerBets();
+        state.setPhase(GameState.Phase.RIVER);
+        notifyPhaseChanged(GameState.Phase.RIVER);
+        runBettingRoundAsync((dealerButtonIndex + 1) % activePlayers.size());
+        if (activePlayers.size() <= 1) { return; }
+
+        // Showdown
+        state.setPhase(GameState.Phase.SHOWDOWN);
+        notifyPhaseChanged(GameState.Phase.SHOWDOWN);
+        determineWinner();
+    }
+
     void runGameLoop() {
         try {
-            // Pre-flop betting (blinds already posted, hole cards dealt by nextRound/startGame)
-            notifyPhaseChanged(GameState.Phase.PRE_FLOP);
-            int firstToAct = (dealerButtonIndex + 3) % activePlayers.size();
-            runBettingRoundAsync(firstToAct);
-            if (activePlayers.size() <= 1) { notifyRoundComplete(); return; }
+            while (!gameOver) {
+                runSingleHand();
 
-            // Flop
-            for (int i = 0; i < 3; i++) {
-                state.getBoard().addCard(state.getDeck().deal());
+                List<Integer> eliminatedIndices = eliminateBrokePlayers();
+
+                if (isHumanEliminated() || players.size() == 1) {
+                    gameOver = true;
+                    gameWinner = players.size() == 1 ? players.get(0) : null;
+                    notifyGameOver(gameWinner);
+                    break;
+                }
+
+                notifyRoundComplete();
+
+                nextRoundFuture = new CompletableFuture<>();
+                nextRoundFuture.get(); // block until UI signals next round
+
+                adjustDealerIndexAfterElimination(eliminatedIndices);
+                nextRound();
             }
-            resetPlayerBets();
-            state.setPhase(GameState.Phase.FLOP);
-            notifyPhaseChanged(GameState.Phase.FLOP);
-            runBettingRoundAsync((dealerButtonIndex + 1) % activePlayers.size());
-            if (activePlayers.size() <= 1) { notifyRoundComplete(); return; }
-
-            // Turn
-            state.getBoard().addCard(state.getDeck().deal());
-            resetPlayerBets();
-            state.setPhase(GameState.Phase.TURN);
-            notifyPhaseChanged(GameState.Phase.TURN);
-            runBettingRoundAsync((dealerButtonIndex + 1) % activePlayers.size());
-            if (activePlayers.size() <= 1) { notifyRoundComplete(); return; }
-
-            // River
-            state.getBoard().addCard(state.getDeck().deal());
-            resetPlayerBets();
-            state.setPhase(GameState.Phase.RIVER);
-            notifyPhaseChanged(GameState.Phase.RIVER);
-            runBettingRoundAsync((dealerButtonIndex + 1) % activePlayers.size());
-            if (activePlayers.size() <= 1) { notifyRoundComplete(); return; }
-
-            // Showdown
-            state.setPhase(GameState.Phase.SHOWDOWN);
-            notifyPhaseChanged(GameState.Phase.SHOWDOWN);
-            determineWinner();
-            notifyRoundComplete();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            notifyError(new GameLoopInterruptedException(e));
+        } catch (CancellationException e) {
+            // Future cancelled during shutdown — exit silently
+        } catch (ExecutionException e) {
+            notifyError(e);
         } catch (GameLoopInterruptedException e) {
-            // Engine thread interrupted — terminate gracefully
             notifyError(e);
         } catch (Exception e) {
             notifyError(e);
+        }
+    }
+
+    void notifyGameOver(Player winner) {
+        if (listener != null) {
+            listener.onGameOver(winner);
         }
     }
 
@@ -534,4 +670,9 @@ public class GameController {
     public int getDealerButtonIndex() { return dealerButtonIndex; }
     public boolean isGameOver() { return gameOver; }
     public Player getGameWinner() { return gameWinner; }
+    public List<Player> getAllOriginalPlayers() { return allOriginalPlayers; }
+    public int getInitialChipCount() { return initialChipCount; }
+    CompletableFuture<Void> getNextRoundFuture() { return nextRoundFuture; }
+    public String getLastRoundWinnerName() { return lastRoundWinnerName; }
+    public int getLastPotAmount() { return lastPotAmount; }
 }
