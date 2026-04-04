@@ -640,7 +640,7 @@ public class GameController {
         }
     }
 
-    private void notifyGameOver(Player winner) {
+    void notifyGameOver(Player winner) {
         if (listener != null) {
             listener.onGameOver(winner);
         }
