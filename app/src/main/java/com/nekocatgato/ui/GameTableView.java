@@ -2,6 +2,7 @@ package com.nekocatgato.ui;
 
 import com.nekocatgato.engine.GameController;
 import com.nekocatgato.engine.GameEventListener;
+import com.nekocatgato.engine.HandEvaluator;
 import com.nekocatgato.model.AIPlayer;
 import com.nekocatgato.model.Card;
 import com.nekocatgato.model.GameState;
@@ -57,6 +58,8 @@ public class GameTableView implements GameEventListener {
     private Text phaseText;
     private Text dealerButtonText;
     private Player highlightedPlayer;
+    private boolean isShowdown = false;
+    private final Map<Player, Text> handRankLabels = new HashMap<>();
 
     public GameTableView(Stage stage, GameController gameController, List<Player> players) {
         this.stage = stage;
@@ -248,7 +251,12 @@ public class GameTableView implements GameEventListener {
             updatePhaseDisplay(phase);
             updatePotDisplay(state.getPot());
             updateBetDisplays();
+            if (phase == GameState.Phase.SHOWDOWN) {
+                isShowdown = true;
+            }
             if (phase == GameState.Phase.PRE_FLOP) {
+                isShowdown = false;
+                clearHandRankLabels();
                 // Restore action buttons, hide "Next Round" button
                 nextRoundBtn.setVisible(false);
                 nextRoundBtn.setManaged(false);
@@ -287,7 +295,9 @@ public class GameTableView implements GameEventListener {
             }
 
             updateChipDisplays();
-            clearAllCardDisplays();
+            if (!isShowdown) {
+                clearAllCardDisplays();
+            }
 
             // Swap action buttons for "Next Round" button
             actionButtonsBox.setVisible(false);
@@ -544,6 +554,17 @@ public class GameTableView implements GameEventListener {
             entry.getValue().getChildren().clear();
         }
         boardArea.getChildren().clear();
+        clearHandRankLabels();
+    }
+
+    private void clearHandRankLabels() {
+        for (Map.Entry<Player, Text> entry : handRankLabels.entrySet()) {
+            Text label = entry.getValue();
+            if (label.getParent() instanceof VBox parent) {
+                parent.getChildren().remove(label);
+            }
+        }
+        handRankLabels.clear();
     }
 
     private void updateHoleCardDisplay(GameState.Phase phase) {
@@ -566,6 +587,7 @@ public class GameTableView implements GameEventListener {
                 }
             }
         } else if (phase == GameState.Phase.SHOWDOWN) {
+            List<Card> boardCards = gameController.getState().getBoard().getCards();
             for (Player player : allPlayers) {
                 if (!(player instanceof AIPlayer)) continue;
 
@@ -579,7 +601,51 @@ public class GameTableView implements GameEventListener {
                 for (Card card : holeCards) {
                     cardBox.getChildren().add(new CardView(card));
                 }
+
+                // Add hand rank label
+                List<Card> allCards = new ArrayList<>(holeCards);
+                allCards.addAll(boardCards);
+                if (allCards.size() >= 5) {
+                    HandEvaluator.HandResult result = new HandEvaluator().evaluateBest(allCards);
+                    Text rankLabel = new Text(formatHandRank(result.rank()));
+                    rankLabel.setStyle("-fx-font-size: 12px; -fx-font-weight: bold;");
+                    VBox playerArea = playerCardAreas.get(player);
+                    if (playerArea != null) {
+                        playerArea.getChildren().add(rankLabel);
+                        handRankLabels.put(player, rankLabel);
+                    }
+                }
+            }
+
+            // Also add hand rank label for human player
+            if (humanPlayer != null) {
+                List<Card> humanHoleCards = humanPlayer.getHand().getCards();
+                if (!humanHoleCards.isEmpty()) {
+                    List<Card> allCards = new ArrayList<>(humanHoleCards);
+                    allCards.addAll(boardCards);
+                    if (allCards.size() >= 5) {
+                        HandEvaluator.HandResult result = new HandEvaluator().evaluateBest(allCards);
+                        Text rankLabel = new Text(formatHandRank(result.rank()));
+                        rankLabel.setStyle("-fx-font-size: 12px; -fx-font-weight: bold;");
+                        VBox playerArea = playerCardAreas.get(humanPlayer);
+                        if (playerArea != null) {
+                            playerArea.getChildren().add(rankLabel);
+                            handRankLabels.put(humanPlayer, rankLabel);
+                        }
+                    }
+                }
             }
         }
+    }
+
+    static String formatHandRank(HandEvaluator.HandRank rank) {
+        String[] words = rank.name().split("_");
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < words.length; i++) {
+            if (i > 0) sb.append(' ');
+            sb.append(words[i].charAt(0));
+            sb.append(words[i].substring(1).toLowerCase());
+        }
+        return sb.toString();
     }
 }
