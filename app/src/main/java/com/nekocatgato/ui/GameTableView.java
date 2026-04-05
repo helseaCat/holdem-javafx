@@ -589,7 +589,7 @@ public class GameTableView implements GameEventListener {
         } else if (phase == GameState.Phase.SHOWDOWN) {
             List<Card> boardCards = gameController.getState().getBoard().getCards();
             List<Player> showdownPlayers = gameController.getActivePlayers();
-            for (Player player : allPlayers) {
+            for (Player player : showdownPlayers) {
                 if (!(player instanceof AIPlayer)) continue;
 
                 HBox cardBox = playerCardBoxes.get(player);
