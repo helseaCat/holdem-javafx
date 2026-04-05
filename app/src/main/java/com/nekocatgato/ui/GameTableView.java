@@ -588,6 +588,7 @@ public class GameTableView implements GameEventListener {
             }
         } else if (phase == GameState.Phase.SHOWDOWN) {
             List<Card> boardCards = gameController.getState().getBoard().getCards();
+            List<Player> showdownPlayers = gameController.getActivePlayers();
             for (Player player : allPlayers) {
                 if (!(player instanceof AIPlayer)) continue;
 
@@ -601,8 +602,13 @@ public class GameTableView implements GameEventListener {
                 for (Card card : holeCards) {
                     cardBox.getChildren().add(new CardView(card));
                 }
+            }
 
-                // Add hand rank label
+            // Add hand rank labels only for players participating in showdown
+            for (Player player : showdownPlayers) {
+                List<Card> holeCards = player.getHand().getCards();
+                if (holeCards.isEmpty()) continue;
+
                 List<Card> allCards = new ArrayList<>(holeCards);
                 allCards.addAll(boardCards);
                 if (allCards.size() >= 5) {
@@ -613,25 +619,6 @@ public class GameTableView implements GameEventListener {
                     if (playerArea != null) {
                         playerArea.getChildren().add(rankLabel);
                         handRankLabels.put(player, rankLabel);
-                    }
-                }
-            }
-
-            // Also add hand rank label for human player
-            if (humanPlayer != null) {
-                List<Card> humanHoleCards = humanPlayer.getHand().getCards();
-                if (!humanHoleCards.isEmpty()) {
-                    List<Card> allCards = new ArrayList<>(humanHoleCards);
-                    allCards.addAll(boardCards);
-                    if (allCards.size() >= 5) {
-                        HandEvaluator.HandResult result = new HandEvaluator().evaluateBest(allCards);
-                        Text rankLabel = new Text(formatHandRank(result.rank()));
-                        rankLabel.setStyle("-fx-font-size: 12px; -fx-font-weight: bold;");
-                        VBox playerArea = playerCardAreas.get(humanPlayer);
-                        if (playerArea != null) {
-                            playerArea.getChildren().add(rankLabel);
-                            handRankLabels.put(humanPlayer, rankLabel);
-                        }
                     }
                 }
             }
