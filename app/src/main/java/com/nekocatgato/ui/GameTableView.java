@@ -176,41 +176,68 @@ public class GameTableView implements GameEventListener {
             root.setBottom(bottomArea);
         }
 
-        // Distribute AI players across top, left, and right
-        // Top gets pot/status bar + first AI player(s)
+        // Distribute AI players clockwise: left, top, right
+        // Player list is already in clockwise order: [human, AI1(left), AI2(top), AI3(right), ...]
         VBox topBar = new VBox(5, potText, phaseText, statusText);
         topBar.setAlignment(Pos.CENTER);
 
         if (!aiPlayers.isEmpty()) {
-            // First AI player goes to top (alongside pot/status)
-            HBox topPlayers = new HBox(20);
-            topPlayers.setAlignment(Pos.CENTER);
-            topPlayers.getChildren().add(playerCardAreas.get(aiPlayers.get(0)));
+            // Compute clockwise seat assignments based on AI count
+            // Seats clockwise from bottom: left, top, right
+            // For larger counts, left/right can stack, top can hold multiple
+            List<Player> leftPlayers = new ArrayList<>();
+            List<Player> topPlayers = new ArrayList<>();
+            List<Player> rightPlayers = new ArrayList<>();
 
-            // If there are 4+ AI players, put the second one at top too
-            if (aiPlayers.size() >= 4) {
-                topPlayers.getChildren().add(playerCardAreas.get(aiPlayers.get(1)));
+            int aiCount = aiPlayers.size();
+            // Distribute AI players clockwise: left → top → right
+            // Compute how many go in each region proportionally
+            int leftCount, topCount, rightCount;
+            if (aiCount <= 1) {
+                leftCount = 0; topCount = aiCount; rightCount = 0;
+            } else if (aiCount == 2) {
+                leftCount = 1; topCount = 1; rightCount = 0;
+            } else {
+                // For 3+: fill left, top, right as evenly as possible
+                // Left gets floor((n-1)/3)+1 seats for the first chunk,
+                // but simpler: left and right get ~1/3 each, top gets the rest
+                leftCount = (aiCount + 2) / 3;  // ceiling division
+                rightCount = (aiCount + 1) / 3;
+                topCount = aiCount - leftCount - rightCount;
             }
 
-            VBox topArea = new VBox(10, topBar, topPlayers);
+            int idx = 0;
+            for (int i = 0; i < leftCount; i++) leftPlayers.add(aiPlayers.get(idx++));
+            for (int i = 0; i < topCount; i++) topPlayers.add(aiPlayers.get(idx++));
+            for (int i = 0; i < rightCount; i++) rightPlayers.add(aiPlayers.get(idx++));
+
+            // Build top area
+            HBox topPlayersBox = new HBox(20);
+            topPlayersBox.setAlignment(Pos.CENTER);
+            for (Player p : topPlayers) {
+                topPlayersBox.getChildren().add(playerCardAreas.get(p));
+            }
+            VBox topArea = new VBox(10, topBar, topPlayersBox);
             topArea.setAlignment(Pos.CENTER);
             root.setTop(topArea);
 
-            // Distribute remaining AI players to left and right
-            int nextIndex = (aiPlayers.size() >= 4) ? 2 : 1;
-
-            if (nextIndex < aiPlayers.size()) {
+            // Build left area
+            if (!leftPlayers.isEmpty()) {
                 VBox leftArea = new VBox(10);
                 leftArea.setAlignment(Pos.CENTER);
-                leftArea.getChildren().add(playerCardAreas.get(aiPlayers.get(nextIndex)));
+                for (Player p : leftPlayers) {
+                    leftArea.getChildren().add(playerCardAreas.get(p));
+                }
                 root.setLeft(leftArea);
-                nextIndex++;
             }
 
-            if (nextIndex < aiPlayers.size()) {
+            // Build right area
+            if (!rightPlayers.isEmpty()) {
                 VBox rightArea = new VBox(10);
                 rightArea.setAlignment(Pos.CENTER);
-                rightArea.getChildren().add(playerCardAreas.get(aiPlayers.get(nextIndex)));
+                for (Player p : rightPlayers) {
+                    rightArea.getChildren().add(playerCardAreas.get(p));
+                }
                 root.setRight(rightArea);
             }
         } else {
