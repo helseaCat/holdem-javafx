@@ -40,8 +40,8 @@ public class MainMenuView {
         HumanPlayer human = new HumanPlayer("You", 1000);
         List<Player> players = List.of(
             human,
-            new AIPlayer("Alice", 1000),
             new AIPlayer("Bob", 1000),
+            new AIPlayer("Alice", 1000),
             new AIPlayer("Charlie", 1000)
         );
 
