@@ -119,6 +119,7 @@ class DealerRotationPropertyTest {
         gc.setGameEventListener(listener);
 
         // Start the game async — first round begins immediately
+        gc.setAiActionDelay(0, 0);
         gc.startGameAsync(playerList);
 
         // After startGame + nextRound(), dealerButtonIndex is (−1 + 1) % P = 0

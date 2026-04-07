@@ -600,6 +600,7 @@ class MultiRoundPropertyTest {
         GameController gc = new GameController();
         listener.setController(gc);
         gc.setGameEventListener(listener);
+        gc.setAiActionDelay(0, 0);
         gc.startGameAsync(playerList);
 
         // Wait for game to end — auto-signaling handles round transitions

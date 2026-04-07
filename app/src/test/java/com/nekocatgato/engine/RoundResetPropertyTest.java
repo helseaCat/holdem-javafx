@@ -141,6 +141,7 @@ class RoundResetPropertyTest {
         gc.setGameEventListener(listener);
 
         // Start the game (runs first hand asynchronously)
+        gc.setAiActionDelay(0, 0);
         gc.startGameAsync(playerList);
 
         // Give the listener access to the player list and state for snapshotting

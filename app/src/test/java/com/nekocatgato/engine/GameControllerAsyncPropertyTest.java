@@ -341,6 +341,7 @@ class GameControllerAsyncPropertyTest {
         HumanPlayer h3 = new HumanPlayer("Human", chips);
         AIPlayer ai4 = new AIPlayer("Bot", chips);
         GameController gc3 = new GameController();
+        gc3.setAiActionDelay(0, 0);
         boolean succeeded = false;
         try {
             gc3.startGameAsync(List.of(h3, ai4));
