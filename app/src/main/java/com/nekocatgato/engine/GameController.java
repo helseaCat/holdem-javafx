@@ -8,6 +8,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadLocalRandom;
 
 public class GameController {
     public static final int BIG_BLIND = 20;
@@ -26,6 +27,8 @@ public class GameController {
     private int initialChipCount;
     private String lastRoundWinnerName;
     private int lastPotAmount;
+    private int aiActionDelayMin = 800;
+    private int aiActionDelayMax = 2000;
     private final ExecutorService engineExecutor = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "EngineThread");
         t.setDaemon(true);
@@ -34,6 +37,11 @@ public class GameController {
 
     public void setGameEventListener(GameEventListener listener) {
         this.listener = listener;
+    }
+
+    void setAiActionDelay(int min, int max) {
+        this.aiActionDelayMin = min;
+        this.aiActionDelayMax = max;
     }
 
     public void startGame(List<Player> players) {
@@ -336,6 +344,22 @@ public class GameController {
             // Notify listener after each action
             if (listener != null) {
                 listener.onPlayerActed(player, action);
+            }
+
+            // Pause after AI actions so the UI can render before the next action
+            if (player instanceof AIPlayer && aiActionDelayMax > 0) {
+                try {
+                    int delay;
+                    if (action == Player.Action.CHECK || action == Player.Action.CALL) {
+                        delay = ThreadLocalRandom.current().nextInt(aiActionDelayMin, aiActionDelayMin + 401);
+                    } else {
+                        delay = ThreadLocalRandom.current().nextInt(aiActionDelayMin + 400, aiActionDelayMax + 1);
+                    }
+                    Thread.sleep(delay);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new GameLoopInterruptedException(e);
+                }
             }
 
             switch (action) {

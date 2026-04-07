@@ -127,6 +127,7 @@ class RoundGatingPropertyTest {
         gc.setGameEventListener(listener);
 
         // Start the game on the engine executor (async)
+        gc.setAiActionDelay(0, 0);
         gc.startGameAsync(playerList);
 
         // Wait for the first round to complete (onRoundComplete fires)

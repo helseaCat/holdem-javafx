@@ -101,6 +101,7 @@ class GameControllerAsyncTest {
     @BeforeEach
     void setUp() {
         controller = new GameController();
+        controller.setAiActionDelay(0, 0);
     }
 
     // ═══════════════════════════════════════════════════════════════════

@@ -143,6 +143,7 @@ class BlindsPositionPropertyTest {
         listener.setController(gc);
         gc.setGameEventListener(listener);
 
+        gc.setAiActionDelay(0, 0);
         gc.startGameAsync(playerList);
 
         for (int round = 1; round <= roundsToCheck; round++) {

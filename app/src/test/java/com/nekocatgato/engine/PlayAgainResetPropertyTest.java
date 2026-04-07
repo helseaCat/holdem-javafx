@@ -106,6 +106,7 @@ class PlayAgainResetPropertyTest {
 
         GameController gc = new GameController();
         gc.setGameEventListener(new NoOpListener());
+        gc.setAiActionDelay(0, 0);
 
         // Record original player names
         List<String> originalNames = new ArrayList<>();
