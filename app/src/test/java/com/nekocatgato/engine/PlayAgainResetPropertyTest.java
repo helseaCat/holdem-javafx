@@ -8,7 +8,6 @@ import net.jqwik.api.constraints.IntRange;
 
 import java.lang.reflect.Field;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Property 9: Play Again resets to initial state
@@ -23,21 +22,6 @@ import java.util.concurrent.CompletableFuture;
  * Validates: Requirements 5.2
  */
 class PlayAgainResetPropertyTest {
-
-    // ── Helper: A HumanPlayer that auto-submits CALL so the game loop can run ──
-
-    static class AutoHumanPlayer extends HumanPlayer {
-        AutoHumanPlayer(String name, int chips) {
-            super(name, chips);
-        }
-
-        @Override
-        public CompletableFuture<ActionResult> decideActionAsync(GameState state, int callAmount) {
-            CompletableFuture<ActionResult> future = super.decideActionAsync(state, callAmount);
-            submitAction(Player.Action.CALL, 0);
-            return future;
-        }
-    }
 
     // ── Helper: AI that always calls/checks ──
 
@@ -94,9 +78,12 @@ class PlayAgainResetPropertyTest {
             @ForAll @IntRange(min = 500, max = 5000) int initialChips,
             @ForAll Random random) throws Exception {
 
-        // Build player list: 1 AutoHuman + (playerCount-1) ScriptedAI
+        // Build player list: 1 HumanPlayer + (playerCount-1) ScriptedAI
         // All players start with the same chip count
-        AutoHumanPlayer human = new AutoHumanPlayer("Human", initialChips);
+        // Using plain HumanPlayer (not auto-submitting) so the game loop blocks
+        // on decideActionAsync, preventing a race between the executor thread
+        // and our assertions.
+        HumanPlayer human = new HumanPlayer("Human", initialChips);
 
         List<Player> playerList = new ArrayList<>();
         playerList.add(human);

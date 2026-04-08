@@ -30,6 +30,17 @@ import java.util.List;
 import java.util.Map;
 
 public class GameTableView implements GameEventListener {
+
+    record ActionButtonConfig(
+        boolean foldEnabled,
+        boolean checkVisible,
+        boolean callVisible,
+        String callText,
+        boolean raiseEnabled,
+        boolean raiseInputEnabled,
+        boolean allInEnabled
+    ) {}
+
     private final Stage stage;
     private final GameController gameController;
     private final List<Player> players;
@@ -253,6 +264,17 @@ public class GameTableView implements GameEventListener {
             applyTurnHighlight(player);
             statusText.setText(player.getName() + "'s turn — call amount: $" + callAmount);
             setActionButtonsDisabled(false);
+
+            ActionButtonConfig config = computeActionConfig(callAmount, humanPlayer.getChips());
+            checkBtn.setVisible(config.checkVisible());
+            checkBtn.setManaged(config.checkVisible());
+            callBtn.setVisible(config.callVisible());
+            callBtn.setManaged(config.callVisible());
+            callBtn.setText(config.callText());
+            raiseBtn.setDisable(!config.raiseEnabled());
+            raiseInput.setDisable(!config.raiseInputEnabled());
+            allInBtn.setDisable(!config.allInEnabled());
+
             updateRaiseInputState(humanPlayer.getChips());
         });
     }
@@ -290,6 +312,12 @@ public class GameTableView implements GameEventListener {
                 actionButtonsBox.setVisible(true);
                 actionButtonsBox.setManaged(true);
                 setActionButtonsDisabled(true);
+                // Reset Check/Call to neutral visibility
+                checkBtn.setVisible(true);
+                checkBtn.setManaged(true);
+                callBtn.setVisible(true);
+                callBtn.setManaged(true);
+                callBtn.setText("Call");
                 updateDealerButton();
             }
             updateBoardDisplay(state);
@@ -650,6 +678,16 @@ public class GameTableView implements GameEventListener {
                 }
             }
         }
+    }
+
+    static ActionButtonConfig computeActionConfig(int callAmount, int playerChips) {
+        if (callAmount < 0) callAmount = 0;
+        boolean foldEnabled = true;
+        boolean checkVisible = callAmount == 0;
+        boolean callVisible = callAmount > 0;
+        String callText = callVisible ? "Call $" + callAmount : "Call";
+        boolean canRaise = playerChips >= GameController.BIG_BLIND;
+        return new ActionButtonConfig(foldEnabled, checkVisible, callVisible, callText, canRaise, canRaise, canRaise);
     }
 
     static String formatHandRank(HandEvaluator.HandRank rank) {
