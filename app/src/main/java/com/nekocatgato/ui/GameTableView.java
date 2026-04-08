@@ -38,7 +38,8 @@ public class GameTableView implements GameEventListener {
         String callText,
         boolean raiseEnabled,
         boolean raiseInputEnabled,
-        boolean allInEnabled
+        boolean allInEnabled,
+        String wagerLabel
     ) {}
 
     private final Stage stage;
@@ -62,6 +63,7 @@ public class GameTableView implements GameEventListener {
     private final Map<Player, HBox> playerCardBoxes = new HashMap<>();
     private final Map<Player, Text> betLabels = new HashMap<>();
     private final List<Player> allPlayers;
+    private int currentCallAmount = 0;
 
     private BorderPane root;
     private StackPane rootStack;
@@ -114,7 +116,8 @@ public class GameTableView implements GameEventListener {
         setActionButtonsDisabled(true);
         allInBtn.setOnAction(e -> {
             raiseInput.setText(String.valueOf(humanPlayer.getChips()));
-            submitPlayerAction(Player.Action.RAISE, humanPlayer.getChips());
+            Player.Action allInAction = currentCallAmount == 0 ? Player.Action.BET : Player.Action.RAISE;
+            submitPlayerAction(allInAction, humanPlayer.getChips());
         });
 
         nextRoundBtn = new Button("Next Round");
@@ -265,6 +268,7 @@ public class GameTableView implements GameEventListener {
             statusText.setText(player.getName() + "'s turn — call amount: $" + callAmount);
             setActionButtonsDisabled(false);
 
+            currentCallAmount = callAmount;
             ActionButtonConfig config = computeActionConfig(callAmount, humanPlayer.getChips());
             checkBtn.setVisible(config.checkVisible());
             checkBtn.setManaged(config.checkVisible());
@@ -272,6 +276,7 @@ public class GameTableView implements GameEventListener {
             callBtn.setManaged(config.callVisible());
             callBtn.setText(config.callText());
             raiseBtn.setDisable(!config.raiseEnabled());
+            raiseBtn.setText(config.wagerLabel());
             raiseInput.setDisable(!config.raiseInputEnabled());
             allInBtn.setDisable(!config.allInEnabled());
 
@@ -488,14 +493,15 @@ public class GameTableView implements GameEventListener {
 
     private void submitPlayerAction(Player.Action action, int raiseAmount) {
         if (humanPlayer != null) {
-            if (action == Player.Action.RAISE) {
+            if (action == Player.Action.RAISE || action == Player.Action.BET) {
+                Player.Action resolvedAction = currentCallAmount == 0 ? Player.Action.BET : Player.Action.RAISE;
                 int validated = validateRaiseAmount(raiseInput.getText(), humanPlayer.getChips());
                 if (validated == -1) {
                     raiseInput.requestFocus();
                     return;
                 }
                 setActionButtonsDisabled(true);
-                humanPlayer.submitAction(action, validated);
+                humanPlayer.submitAction(resolvedAction, validated);
             } else {
                 setActionButtonsDisabled(true);
                 humanPlayer.submitAction(action, raiseAmount);
@@ -687,7 +693,8 @@ public class GameTableView implements GameEventListener {
         boolean callVisible = callAmount > 0;
         String callText = callVisible ? "Call $" + callAmount : "Call";
         boolean canRaise = playerChips >= GameController.BIG_BLIND;
-        return new ActionButtonConfig(foldEnabled, checkVisible, callVisible, callText, canRaise, canRaise, canRaise);
+        String wagerLabel = callAmount == 0 ? "Bet" : "Raise";
+        return new ActionButtonConfig(foldEnabled, checkVisible, callVisible, callText, canRaise, canRaise, canRaise, wagerLabel);
     }
 
     static String formatHandRank(HandEvaluator.HandRank rank) {

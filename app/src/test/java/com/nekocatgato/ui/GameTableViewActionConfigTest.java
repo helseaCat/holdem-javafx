@@ -1,5 +1,6 @@
 package com.nekocatgato.ui;
 
+import com.nekocatgato.model.Player;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -9,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class GameTableViewActionConfigTest {
 
-    /** Req 6.1: callAmount=0, plenty of chips → Fold+Check+Raise, Call hidden */
+    /** Req 6.1: callAmount=0, plenty of chips → Fold+Check+Raise, Call hidden, wagerLabel="Bet" */
     @Test
     void noCallWithSufficientChips() {
         var config = GameTableView.computeActionConfig(0, 500);
@@ -19,9 +20,10 @@ class GameTableViewActionConfigTest {
         assertTrue(config.raiseEnabled());
         assertTrue(config.raiseInputEnabled());
         assertTrue(config.allInEnabled());
+        assertEquals("Bet", config.wagerLabel());
     }
 
-    /** Req 6.2: callAmount>0, plenty of chips → Fold+Call+Raise, Check hidden */
+    /** Req 6.2: callAmount>0, plenty of chips → Fold+Call+Raise, Check hidden, wagerLabel="Raise" */
     @Test
     void callWithSufficientChips() {
         var config = GameTableView.computeActionConfig(50, 500);
@@ -32,9 +34,10 @@ class GameTableViewActionConfigTest {
         assertTrue(config.raiseEnabled());
         assertTrue(config.raiseInputEnabled());
         assertTrue(config.allInEnabled());
+        assertEquals("Raise", config.wagerLabel());
     }
 
-    /** Req 6.3: callAmount>0, chips below BIG_BLIND → Fold+Call, Check hidden, Raise disabled */
+    /** Req 6.3: callAmount>0, chips below BIG_BLIND → Fold+Call, Raise disabled, wagerLabel="Raise" */
     @Test
     void callWithInsufficientChips() {
         var config = GameTableView.computeActionConfig(50, 10);
@@ -44,9 +47,10 @@ class GameTableViewActionConfigTest {
         assertFalse(config.raiseEnabled());
         assertFalse(config.raiseInputEnabled());
         assertFalse(config.allInEnabled());
+        assertEquals("Raise", config.wagerLabel());
     }
 
-    /** Edge case: callAmount=0, chips below BIG_BLIND → Fold+Check, Call hidden, Raise disabled */
+    /** Edge case: callAmount=0, chips below BIG_BLIND → Fold+Check, Raise disabled, wagerLabel="Bet" */
     @Test
     void noCallWithInsufficientChips() {
         var config = GameTableView.computeActionConfig(0, 10);
@@ -56,14 +60,16 @@ class GameTableViewActionConfigTest {
         assertFalse(config.raiseEnabled());
         assertFalse(config.raiseInputEnabled());
         assertFalse(config.allInEnabled());
+        assertEquals("Bet", config.wagerLabel());
     }
 
-    /** Defensive: negative callAmount treated as 0 */
+    /** Defensive: negative callAmount treated as 0 → wagerLabel="Bet" */
     @Test
     void negativeCallAmountTreatedAsZero() {
         var config = GameTableView.computeActionConfig(-10, 500);
         assertTrue(config.checkVisible());
         assertFalse(config.callVisible());
+        assertEquals("Bet", config.wagerLabel());
     }
 
     /** Defensive: negative playerChips disables raise */
@@ -74,5 +80,12 @@ class GameTableViewActionConfigTest {
         assertFalse(config.raiseEnabled());
         assertFalse(config.raiseInputEnabled());
         assertFalse(config.allInEnabled());
+        assertEquals("Bet", config.wagerLabel());
+    }
+
+    /** Req 1.1: Player.Action.BET exists and toString returns "BET" */
+    @Test
+    void betActionExistsInEnum() {
+        assertEquals("BET", Player.Action.BET.toString());
     }
 }

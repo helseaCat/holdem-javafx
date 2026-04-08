@@ -37,5 +37,5 @@ public abstract class Player {
         return CompletableFuture.completedFuture(new ActionResult(action, 0));
     }
 
-    public enum Action { FOLD, CHECK, CALL, RAISE }
+    public enum Action { FOLD, CHECK, CALL, BET, RAISE }
 }
