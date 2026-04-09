@@ -256,6 +256,7 @@ public class GameController {
                     pointer++;
                     break;
 
+                case BET:
                 case RAISE:
                     // Get raise amount from player
                     int raiseAmount = getRaiseAmount(player);
@@ -391,6 +392,7 @@ public class GameController {
                     pointer++;
                     break;
 
+                case BET:
                 case RAISE:
                     int raiseAmount = result.raiseAmount();
                     if (raiseAmount < 0) {

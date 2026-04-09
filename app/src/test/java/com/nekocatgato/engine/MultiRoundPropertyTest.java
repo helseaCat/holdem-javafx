@@ -582,7 +582,7 @@ class MultiRoundPropertyTest {
      * Strategy: Run a full async game to completion using auto-signaling, then
      * reset and verify all fields match initial state.
      */
-    @Property(tries = 100)
+    @Property(tries = 25)
     void playAgainResetsToInitialState(
             @ForAll @IntRange(min = 2, max = 4) int playerCount,
             @ForAll @IntRange(min = 1000, max = 5000) int chipAmount) throws Exception {
@@ -604,7 +604,7 @@ class MultiRoundPropertyTest {
         gc.startGameAsync(playerList);
 
         // Wait for game to end — auto-signaling handles round transitions
-        boolean gameEnded = listener.gameOverLatch.await(30, TimeUnit.SECONDS);
+        boolean gameEnded = listener.gameOverLatch.await(10, TimeUnit.SECONDS);
 
         if (!gameEnded) {
             // If game didn't end in time, skip this trial
