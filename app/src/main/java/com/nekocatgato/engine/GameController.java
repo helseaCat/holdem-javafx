@@ -601,6 +601,7 @@ public class GameController {
         int firstToAct = (dealerButtonIndex + 3) % activePlayers.size();
         runBettingRoundAsync(firstToAct);
         if (activePlayers.size() <= 1) { return; }
+        postRoundDelay();
 
         // Flop
         for (int i = 0; i < 3; i++) {
@@ -611,6 +612,7 @@ public class GameController {
         notifyPhaseChanged(GameState.Phase.FLOP);
         runBettingRoundAsync((dealerButtonIndex + 1) % activePlayers.size());
         if (activePlayers.size() <= 1) { return; }
+        postRoundDelay();
 
         // Turn
         state.getBoard().addCard(state.getDeck().deal());
@@ -619,6 +621,7 @@ public class GameController {
         notifyPhaseChanged(GameState.Phase.TURN);
         runBettingRoundAsync((dealerButtonIndex + 1) % activePlayers.size());
         if (activePlayers.size() <= 1) { return; }
+        postRoundDelay();
 
         // River
         state.getBoard().addCard(state.getDeck().deal());
@@ -627,11 +630,29 @@ public class GameController {
         notifyPhaseChanged(GameState.Phase.RIVER);
         runBettingRoundAsync((dealerButtonIndex + 1) % activePlayers.size());
         if (activePlayers.size() <= 1) { return; }
+        postRoundDelay();
 
         // Showdown
         state.setPhase(GameState.Phase.SHOWDOWN);
         notifyPhaseChanged(GameState.Phase.SHOWDOWN);
         determineWinner();
+    }
+
+    /**
+     * Pauses after a betting round when the last actor was an AI and the
+     * round did not end via fold-out. This keeps the last AI action text
+     * visible in the UI before the next phase transition overwrites it.
+     */
+    protected void postRoundDelay() {
+        if (lastRoundActor instanceof AIPlayer && aiActionDelayMax > 0) {
+            try {
+                int delay = ThreadLocalRandom.current().nextInt(aiActionDelayMin, aiActionDelayMax + 1);
+                Thread.sleep(delay);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new GameLoopInterruptedException(e);
+            }
+        }
     }
 
     void runGameLoop() {
