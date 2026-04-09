@@ -29,6 +29,7 @@ public class GameController {
     private int lastPotAmount;
     private int aiActionDelayMin = 800;
     private int aiActionDelayMax = 2000;
+    private Player lastRoundActor;
     private final ExecutorService engineExecutor = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "EngineThread");
         t.setDaemon(true);
@@ -346,6 +347,9 @@ public class GameController {
             if (listener != null) {
                 listener.onPlayerActed(player, action);
             }
+
+            // Track last actor for post-round delay logic
+            lastRoundActor = player;
 
             // Pause after AI actions so the UI can render before the next action
             if (player instanceof AIPlayer && aiActionDelayMax > 0) {
@@ -701,4 +705,5 @@ public class GameController {
     CompletableFuture<Void> getNextRoundFuture() { return nextRoundFuture; }
     public String getLastRoundWinnerName() { return lastRoundWinnerName; }
     public int getLastPotAmount() { return lastPotAmount; }
+    Player getLastRoundActor() { return lastRoundActor; }
 }
