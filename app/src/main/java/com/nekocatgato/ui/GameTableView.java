@@ -62,6 +62,7 @@ public class GameTableView implements GameEventListener {
     private final Map<Player, VBox> playerCardAreas = new HashMap<>();
     private final Map<Player, HBox> playerCardBoxes = new HashMap<>();
     private final Map<Player, Text> betLabels = new HashMap<>();
+    private final Map<Player, Text> actionLabels = new HashMap<>();
     private final List<Player> allPlayers;
     private int currentCallAmount = 0;
 
@@ -148,6 +149,7 @@ public class GameTableView implements GameEventListener {
         playerCardAreas.clear();
         playerCardBoxes.clear();
         betLabels.clear();
+        actionLabels.clear();
 
         List<Player> aiPlayers = new ArrayList<>();
         for (Player p : allPlayers) {
@@ -159,10 +161,14 @@ public class GameTableView implements GameEventListener {
             betLabel.setVisible(false);
             betLabels.put(p, betLabel);
 
+            Text actionLabel = new Text();
+            actionLabel.setVisible(false);
+            actionLabels.put(p, actionLabel);
+
             HBox cardBox = new HBox(5);
             cardBox.setAlignment(Pos.CENTER);
 
-            VBox playerBox = new VBox(5, nameText, chipText, betLabel, cardBox);
+            VBox playerBox = new VBox(5, nameText, chipText, betLabel, actionLabel, cardBox);
             playerBox.setAlignment(Pos.CENTER);
             playerBox.setStyle("-fx-padding: 10;");
 
@@ -292,6 +298,11 @@ public class GameTableView implements GameEventListener {
             setActionButtonsDisabled(true);
             if (action == Player.Action.FOLD) {
                 removePlayerCards(player);
+            }
+            Text label = actionLabels.get(player);
+            if (label != null) {
+                label.setText(formatActionLabel(action, wagerAmount, player.getChips()));
+                label.setVisible(true);
             }
             updateBetDisplays();
             updatePotDisplay(gameController.getState().getPot());
@@ -695,6 +706,18 @@ public class GameTableView implements GameEventListener {
         boolean canRaise = playerChips >= GameController.BIG_BLIND;
         String wagerLabel = callAmount == 0 ? "Bet" : "Raise";
         return new ActionButtonConfig(foldEnabled, checkVisible, callVisible, callText, canRaise, canRaise, canRaise, wagerLabel);
+    }
+
+    static String formatActionLabel(Player.Action action, int wagerAmount, int remainingChips) {
+        if (wagerAmount < 0) wagerAmount = 0;
+        if (remainingChips < 0) remainingChips = 0;
+        return switch (action) {
+            case CHECK -> "Check";
+            case FOLD -> "Fold";
+            case CALL -> remainingChips == 0 ? "All In" : "Call";
+            case BET -> remainingChips == 0 ? "All In" : "Bet $" + wagerAmount;
+            case RAISE -> remainingChips == 0 ? "All In" : "Raise $" + wagerAmount;
+        };
     }
 
     static String formatHandRank(HandEvaluator.HandRank rank) {
