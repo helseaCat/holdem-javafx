@@ -87,7 +87,7 @@ class AiCheckVisibilityPreservationTest {
         }
 
         @Override public void onPlayerTurn(Player player, int callAmount) {}
-        @Override public void onPlayerActed(Player player, Player.Action action) {}
+        @Override public void onPlayerActed(Player player, Player.Action action, int wagerAmount) {}
         @Override public void onPlayerEliminated(Player player) {}
         @Override public void onGameOver(Player winner) {}
         @Override public void onError(Exception e) {}

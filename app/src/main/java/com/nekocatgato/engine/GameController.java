@@ -345,7 +345,9 @@ public class GameController {
 
             // Notify listener after each action
             if (listener != null) {
-                listener.onPlayerActed(player, action);
+                int wagerAmount = (action == Player.Action.BET || action == Player.Action.RAISE)
+                    ? result.raiseAmount() : 0;
+                listener.onPlayerActed(player, action, wagerAmount);
             }
 
             // Track last actor for post-round delay logic

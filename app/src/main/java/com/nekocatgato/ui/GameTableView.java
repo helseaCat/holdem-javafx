@@ -285,7 +285,7 @@ public class GameTableView implements GameEventListener {
     }
 
     @Override
-    public void onPlayerActed(Player player, Player.Action action) {
+    public void onPlayerActed(Player player, Player.Action action, int wagerAmount) {
         Platform.runLater(() -> {
             removeTurnHighlight();
             statusText.setText(player.getName() + ": " + action);

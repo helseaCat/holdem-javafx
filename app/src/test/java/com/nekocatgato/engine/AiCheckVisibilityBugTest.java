@@ -72,7 +72,7 @@ class AiCheckVisibilityBugTest {
         final List<GameState.Phase> phasesNeedingPostRoundDelay = new ArrayList<>();
 
         @Override
-        public void onPlayerActed(Player player, Player.Action action) {
+        public void onPlayerActed(Player player, Player.Action action, int wagerAmount) {
             lastActedPlayer = player;
             lastAction = action;
         }

@@ -59,7 +59,7 @@ class RoundGatingPropertyTest {
         public void onPlayerTurn(Player player, int callAmount) {}
 
         @Override
-        public void onPlayerActed(Player player, Player.Action action) {}
+        public void onPlayerActed(Player player, Player.Action action, int wagerAmount) {}
 
         @Override
         public void onRoundComplete(GameState state) {
