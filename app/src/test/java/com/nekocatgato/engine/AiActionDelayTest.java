@@ -49,7 +49,7 @@ class AiActionDelayTest {
         @Override public void onPhaseChanged(GameState.Phase phase, GameState state) {}
         @Override public void onPlayerTurn(Player player, int callAmount) {}
         @Override
-        public void onPlayerActed(Player player, Player.Action action) {
+        public void onPlayerActed(Player player, Player.Action action, int wagerAmount) {
             actionTimestamps.add(System.nanoTime());
         }
         @Override

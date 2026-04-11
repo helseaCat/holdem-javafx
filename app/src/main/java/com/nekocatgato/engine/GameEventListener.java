@@ -11,7 +11,7 @@ import com.nekocatgato.model.Player;
 public interface GameEventListener {
     void onPhaseChanged(GameState.Phase phase, GameState state);
     void onPlayerTurn(Player player, int callAmount);
-    void onPlayerActed(Player player, Player.Action action);
+    void onPlayerActed(Player player, Player.Action action, int wagerAmount);
     void onRoundComplete(GameState state);
     void onPlayerEliminated(Player player);
     void onGameOver(Player winner);

@@ -29,6 +29,7 @@ public class GameController {
     private int lastPotAmount;
     private int aiActionDelayMin = 800;
     private int aiActionDelayMax = 2000;
+    private Player lastRoundActor;
     private final ExecutorService engineExecutor = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "EngineThread");
         t.setDaemon(true);
@@ -344,8 +345,13 @@ public class GameController {
 
             // Notify listener after each action
             if (listener != null) {
-                listener.onPlayerActed(player, action);
+                int wagerAmount = (action == Player.Action.BET || action == Player.Action.RAISE)
+                    ? result.raiseAmount() : 0;
+                listener.onPlayerActed(player, action, wagerAmount);
             }
+
+            // Track last actor for post-round delay logic
+            lastRoundActor = player;
 
             // Pause after AI actions so the UI can render before the next action
             if (player instanceof AIPlayer && aiActionDelayMax > 0) {
@@ -597,6 +603,7 @@ public class GameController {
         int firstToAct = (dealerButtonIndex + 3) % activePlayers.size();
         runBettingRoundAsync(firstToAct);
         if (activePlayers.size() <= 1) { return; }
+        postRoundDelay();
 
         // Flop
         for (int i = 0; i < 3; i++) {
@@ -607,6 +614,7 @@ public class GameController {
         notifyPhaseChanged(GameState.Phase.FLOP);
         runBettingRoundAsync((dealerButtonIndex + 1) % activePlayers.size());
         if (activePlayers.size() <= 1) { return; }
+        postRoundDelay();
 
         // Turn
         state.getBoard().addCard(state.getDeck().deal());
@@ -615,6 +623,7 @@ public class GameController {
         notifyPhaseChanged(GameState.Phase.TURN);
         runBettingRoundAsync((dealerButtonIndex + 1) % activePlayers.size());
         if (activePlayers.size() <= 1) { return; }
+        postRoundDelay();
 
         // River
         state.getBoard().addCard(state.getDeck().deal());
@@ -623,11 +632,29 @@ public class GameController {
         notifyPhaseChanged(GameState.Phase.RIVER);
         runBettingRoundAsync((dealerButtonIndex + 1) % activePlayers.size());
         if (activePlayers.size() <= 1) { return; }
+        postRoundDelay();
 
         // Showdown
         state.setPhase(GameState.Phase.SHOWDOWN);
         notifyPhaseChanged(GameState.Phase.SHOWDOWN);
         determineWinner();
+    }
+
+    /**
+     * Pauses after a betting round when the last actor was an AI and the
+     * round did not end via fold-out. This keeps the last AI action text
+     * visible in the UI before the next phase transition overwrites it.
+     */
+    protected void postRoundDelay() {
+        if (lastRoundActor instanceof AIPlayer && aiActionDelayMax > 0) {
+            try {
+                int delay = ThreadLocalRandom.current().nextInt(aiActionDelayMin, aiActionDelayMax + 1);
+                Thread.sleep(delay);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new GameLoopInterruptedException(e);
+            }
+        }
     }
 
     void runGameLoop() {
@@ -701,4 +728,5 @@ public class GameController {
     CompletableFuture<Void> getNextRoundFuture() { return nextRoundFuture; }
     public String getLastRoundWinnerName() { return lastRoundWinnerName; }
     public int getLastPotAmount() { return lastPotAmount; }
+    Player getLastRoundActor() { return lastRoundActor; }
 }

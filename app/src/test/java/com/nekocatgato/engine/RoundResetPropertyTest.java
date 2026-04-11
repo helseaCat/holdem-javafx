@@ -103,7 +103,7 @@ class RoundResetPropertyTest {
         }
 
         @Override public void onPlayerTurn(Player player, int callAmount) {}
-        @Override public void onPlayerActed(Player player, Player.Action action) {}
+        @Override public void onPlayerActed(Player player, Player.Action action, int wagerAmount) {}
         @Override public void onRoundComplete(GameState state) { firstRoundLatch.countDown(); }
         @Override public void onPlayerEliminated(Player player) {}
         @Override public void onGameOver(Player winner) { gameOverFired.set(true); }

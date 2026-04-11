@@ -59,7 +59,7 @@ class MultiRoundPropertyTest {
 
         @Override public void onPhaseChanged(GameState.Phase phase, GameState state) {}
         @Override public void onPlayerTurn(Player player, int callAmount) {}
-        @Override public void onPlayerActed(Player player, Player.Action action) {}
+        @Override public void onPlayerActed(Player player, Player.Action action, int wagerAmount) {}
         @Override public void onRoundComplete(GameState state) {}
 
         @Override
@@ -94,7 +94,7 @@ class MultiRoundPropertyTest {
 
         @Override public void onPhaseChanged(GameState.Phase phase, GameState state) {}
         @Override public void onPlayerTurn(Player player, int callAmount) {}
-        @Override public void onPlayerActed(Player player, Player.Action action) {}
+        @Override public void onPlayerActed(Player player, Player.Action action, int wagerAmount) {}
 
         @Override
         public void onRoundComplete(GameState state) {

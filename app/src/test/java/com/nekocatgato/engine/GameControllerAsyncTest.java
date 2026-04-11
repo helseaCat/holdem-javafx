@@ -54,7 +54,7 @@ class GameControllerAsyncTest {
         }
 
         @Override
-        public void onPlayerActed(Player player, Player.Action action) {
+        public void onPlayerActed(Player player, Player.Action action, int wagerAmount) {
             eventLog.add("acted:" + player.getName() + ":" + action);
         }
 
