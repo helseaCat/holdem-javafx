@@ -313,6 +313,7 @@ public class GameTableView implements GameEventListener {
     @Override
     public void onPhaseChanged(GameState.Phase phase, GameState state) {
         Platform.runLater(() -> {
+            clearAllActionLabels();
             updatePhaseDisplay(phase);
             updatePotDisplay(state.getPot());
             updateBetDisplays();
@@ -347,6 +348,7 @@ public class GameTableView implements GameEventListener {
     public void onRoundComplete(GameState state) {
         Platform.runLater(() -> {
             removeTurnHighlight();
+            clearAllActionLabels();
             phaseText.setText("");
             updatePotDisplay(state.getPot());
             for (Text betLabel : betLabels.values()) {
@@ -388,6 +390,7 @@ public class GameTableView implements GameEventListener {
             playerCardAreas.remove(player);
             playerCardBoxes.remove(player);
             betLabels.remove(player);
+            actionLabels.remove(player);
         });
     }
 
@@ -637,6 +640,13 @@ public class GameTableView implements GameEventListener {
             }
         }
         handRankLabels.clear();
+    }
+
+    private void clearAllActionLabels() {
+        for (Text label : actionLabels.values()) {
+            label.setText("");
+            label.setVisible(false);
+        }
     }
 
     private void updateHoleCardDisplay(GameState.Phase phase) {
