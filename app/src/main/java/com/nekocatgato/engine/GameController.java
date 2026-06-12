@@ -343,7 +343,7 @@ public class GameController {
             // Pause before AI actions so the turn highlight is visible
             if (player instanceof AIPlayer && aiActionDelayMax > 0) {
                 try {
-                    int delay = ThreadLocalRandom.current().nextInt(aiActionDelayMin, aiActionDelayMin + 401);
+                    int delay = ThreadLocalRandom.current().nextInt(aiActionDelayMin, aiActionDelayMax + 1);
                     Thread.sleep(delay);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
