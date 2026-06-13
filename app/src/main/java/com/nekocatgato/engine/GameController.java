@@ -335,9 +335,20 @@ public class GameController {
 
             int callAmount = highestBet - player.getCurrentBet();
 
-            // Notify listener before human turns
-            if (player instanceof HumanPlayer && listener != null) {
+            // Notify listener before each player's turn
+            if (listener != null) {
                 listener.onPlayerTurn(player, callAmount);
+            }
+
+            // Pause before AI actions so the turn highlight is visible
+            if (player instanceof AIPlayer && aiActionDelayMax > 0) {
+                try {
+                    int delay = ThreadLocalRandom.current().nextInt(aiActionDelayMin, aiActionDelayMax + 1);
+                    Thread.sleep(delay);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new GameLoopInterruptedException(e);
+                }
             }
 
             ActionResult result = resolveAction(player, state, callAmount);

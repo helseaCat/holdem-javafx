@@ -74,6 +74,8 @@ public class GameTableView implements GameEventListener {
     private Player highlightedPlayer;
     private boolean isShowdown = false;
     private final Map<Player, Text> handRankLabels = new HashMap<>();
+    private final Map<Player, Text> nameLabels = new HashMap<>();
+    private final Map<Player, Text> chipLabels = new HashMap<>();
 
     public GameTableView(Stage stage, GameController gameController, List<Player> players) {
         this.stage = stage;
@@ -150,12 +152,16 @@ public class GameTableView implements GameEventListener {
         playerCardBoxes.clear();
         betLabels.clear();
         actionLabels.clear();
+        nameLabels.clear();
+        chipLabels.clear();
 
         List<Player> aiPlayers = new ArrayList<>();
         for (Player p : allPlayers) {
             // Create a VBox for each player: name, chips, bet label, card HBox
             Text nameText = new Text(p.getName());
             Text chipText = new Text("Chips: $" + p.getChips());
+            nameLabels.put(p, nameText);
+            chipLabels.put(p, chipText);
 
             Text betLabel = new Text();
             betLabel.setVisible(false);
@@ -271,22 +277,28 @@ public class GameTableView implements GameEventListener {
     public void onPlayerTurn(Player player, int callAmount) {
         Platform.runLater(() -> {
             applyTurnHighlight(player);
-            statusText.setText(player.getName() + "'s turn — call amount: $" + callAmount);
-            setActionButtonsDisabled(false);
+            String turnLabel = (player instanceof HumanPlayer)
+                    ? "Your turn"
+                    : player.getName() + "'s turn";
+            statusText.setText(turnLabel + " — call amount: $" + callAmount);
 
-            currentCallAmount = callAmount;
-            ActionButtonConfig config = computeActionConfig(callAmount, humanPlayer.getChips());
-            checkBtn.setVisible(config.checkVisible());
-            checkBtn.setManaged(config.checkVisible());
-            callBtn.setVisible(config.callVisible());
-            callBtn.setManaged(config.callVisible());
-            callBtn.setText(config.callText());
-            raiseBtn.setDisable(!config.raiseEnabled());
-            raiseBtn.setText(config.wagerLabel());
-            raiseInput.setDisable(!config.raiseInputEnabled());
-            allInBtn.setDisable(!config.allInEnabled());
+            if (player instanceof HumanPlayer) {
+                setActionButtonsDisabled(false);
 
-            updateRaiseInputState(humanPlayer.getChips());
+                currentCallAmount = callAmount;
+                ActionButtonConfig config = computeActionConfig(callAmount, humanPlayer.getChips());
+                checkBtn.setVisible(config.checkVisible());
+                checkBtn.setManaged(config.checkVisible());
+                callBtn.setVisible(config.callVisible());
+                callBtn.setManaged(config.callVisible());
+                callBtn.setText(config.callText());
+                raiseBtn.setDisable(!config.raiseEnabled());
+                raiseBtn.setText(config.wagerLabel());
+                raiseInput.setDisable(!config.raiseInputEnabled());
+                allInBtn.setDisable(!config.allInEnabled());
+
+                updateRaiseInputState(humanPlayer.getChips());
+            }
         });
     }
 
@@ -597,6 +609,14 @@ public class GameTableView implements GameEventListener {
             playerBox.setStyle("-fx-padding: 10; -fx-border-color: gold; -fx-border-width: 2;");
             highlightedPlayer = player;
         }
+        Text name = nameLabels.get(player);
+        Text chips = chipLabels.get(player);
+        if (name != null) {
+            name.setStyle("-fx-font-weight: bold;");
+        }
+        if (chips != null) {
+            chips.setStyle("-fx-font-weight: bold;");
+        }
     }
 
     private void removeTurnHighlight() {
@@ -604,6 +624,14 @@ public class GameTableView implements GameEventListener {
             VBox box = playerCardAreas.get(highlightedPlayer);
             if (box != null) {
                 box.setStyle("-fx-padding: 10;");
+            }
+            Text name = nameLabels.get(highlightedPlayer);
+            Text chips = chipLabels.get(highlightedPlayer);
+            if (name != null) {
+                name.setStyle("");
+            }
+            if (chips != null) {
+                chips.setStyle("");
             }
             highlightedPlayer = null;
         }
